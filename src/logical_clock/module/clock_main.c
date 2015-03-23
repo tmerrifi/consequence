@@ -691,26 +691,10 @@ void task_clock_entry_sleep(struct task_clock_group_info * group_info){
     int lowest_tid=-1;
     unsigned long flags;
     spin_lock_irqsave(&group_info->lock, flags);
-    while(true){
-        lowest_tid=__determine_lowest_and_notify_or_wait(group_info, 14);
-        //set ourselves to be sleeping
-        if (group_info->clocks[current->task_clock.tid].waiting){
-            group_info->clocks[current->task_clock.tid].sleeping=1;
-        }
-        //if we aren't going to wake anyone up, and no one else is alive...
-        //do what we can to wake someone up
-        if (lowest_tid<0 && __active_thread_count(group_info)==0){
-#if defined(DEBUG_TASK_CLOCK_FINE_GRAINED)
-            printk(KERN_EMERG "DLC: No one is awake %d old lowest tid %d count %d total %d\n", 
-                   group_info->notification_needed, group_info->lowest_tid, debug_counter_overflow, __debug_counter_overflow);
-            __clock_debug_print_last_n(10);
-            __search_for_lowest_print(group_info);
-#endif
-        }
-        else{
-            //break out
-            break;
-        }
+    lowest_tid=__determine_lowest_and_notify_or_wait(group_info, 14);
+    //set ourselves to be sleeping
+    if (group_info->clocks[current->task_clock.tid].waiting){
+        group_info->clocks[current->task_clock.tid].sleeping=1;
     }
 
     spin_unlock_irqrestore(&group_info->lock, flags);
