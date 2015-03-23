@@ -75,7 +75,6 @@ static inline void logical_clock_read_clock_and_update(struct task_clock_group_i
     uint64_t new_raw_count, prev_raw_count, new_pmc;
     int64_t delta;
     //for our version of perf counters (v3 for Intel) this works...probably not for anything else
-    //ARCH_DEP_TODO
     int shift = 64 - X86_CNT_VAL_BITS;
     struct hw_perf_event * hwc = &group_info->clocks[id].event->hw;
 

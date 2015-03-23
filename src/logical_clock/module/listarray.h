@@ -37,11 +37,6 @@ struct listarray{
 #define listarray_foreach_allelements(la, int_i) \
     for (int_i=0;int_i<=la->max_index;int_i++) \
 
-#define __print_debugging(la, int_i)                                   \
-    printk(KERN_EMERG "index: %d, next %d, prev %d, head %d, tail %d, count %d\n", \
-           int_i, listarray_getentry(la, int_i).next, listarray_getentry(la, int_i).prev, \
-           la->head, la->tail, la->count);
-
 static inline void listarray_init(struct listarray * la){
     int i;
     la->head=la->tail=LISTARRAY_ENTRY_NULL;
@@ -58,8 +53,6 @@ static inline int listarray_count(struct listarray * la){
 }
 
 static inline void listarray_insert(struct listarray * la, int index){
-    //printk(KERN_EMERG "inserting %d\n", index);
-    //__print_debugging(la, index);
     //if it doesn't pass this, then something is wrong (its already in the list?)
     BUG_ON(!(listarray_getentry(la, index).next==LISTARRAY_ENTRY_DEAD && 
              listarray_getentry(la, index).prev==LISTARRAY_ENTRY_DEAD));
@@ -78,22 +71,10 @@ static inline void listarray_insert(struct listarray * la, int index){
     if (index>la->max_index){
         la->max_index=index;
     }
-
-    //printk(KERN_EMERG "done inserting %d\n", index);
-    //__print_debugging(la, index);
-
 }
 
 static inline void listarray_remove(struct listarray * la, int index){
     int tmp;
-    //printk(KERN_EMERG "removing %d\n", index);
-    //__print_debugging(la, index);
-    //printk(KERN_EMERG "*****list*****\n");
-    //listarray_foreach(la, tmp){
-    //printk(KERN_EMERG "-----%d\n", tmp);
-    //}
-    //printk(KERN_EMERG "******end list******\n\n");
-
     BUG_ON(la->count <= 0);
     if (listarray_getentry(la, index).prev==LISTARRAY_ENTRY_NULL &&
         listarray_getentry(la, index).next==LISTARRAY_ENTRY_NULL){
@@ -123,10 +104,6 @@ static inline void listarray_remove(struct listarray * la, int index){
     listarray_getentry(la, index).prev=listarray_getentry(la,index).next=LISTARRAY_ENTRY_DEAD;
     la->count--;
     
-    
-    //printk(KERN_EMERG "done removing %d\n", index);
-    //__print_debugging(la, index);
-
 }
 
 //is this item in the list?
