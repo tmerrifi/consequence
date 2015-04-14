@@ -69,6 +69,7 @@
 
 class xrun {
 
+    //this is an internal data structure we use to pass around statistics about a commit
     struct local_copy_stats{
         int partial_unique;
         int dirty_pages;
@@ -77,63 +78,54 @@ class xrun {
 
 private:
     static volatile bool _initialized;
-    static volatile bool _protection_enabled;
     static size_t _master_thread_id;
     static size_t _thread_index;
-    static size_t _children_threads_count;
     static size_t _lock_count;
     static bool _token_holding;
-    static struct timespec fence_start;
-    static struct timespec fence_end;
-    static int fence_total_us;
-    static struct timespec token_start;
-    static struct timespec token_end;
-    static int token_total_us;
-    static int free_count;
-    static int commit_count;
-    static struct timespec ts1;
-    static struct timespec ts2;
+
+    /******these variables keep track of some of the coarsening thread-local state*/
     static int tx_coarsening_counter;
     static int tx_current_coarsening_level;
     static int tx_consecutively_coarsened;
     static bool tx_monitor_next;
+    /************************************************/
+
+    /********Sleeping is done to make things easier on the Conversion garbage collector. 
+    The GC is not concurrent, and does not collect versions that are newer than the oldest
+    version currently held. In the event that the main thread creates some children, and then
+    joins on them...and thus holding on to an early version...then no versions are ever 
+    collected! Instead, we put the thread to "sleep" and that allows the GC to collect newer
+    versions. The sleep_count is used to ensure we don't sleep/unsleep too much. We really don't
+    want to do it too much as it adds some overhead.****/
+
     static int sleep_count;
     static bool is_sleeping;
-    static bool debugged;
 
 public:
 
   /// @brief Initialize the system.
   static void initialize(void) {
-    DEBUG("initializing xrun");
-
     _initialized = false;
-    _protection_enabled = false;
-    _children_threads_count = 0;
     _lock_count = 0;
     _token_holding = false;
-    fence_total_us = 0;
-    token_total_us = 0;
-    free_count = 0;
-    commit_count=0;
     sleep_count=0;
     is_sleeping=false;
     tx_coarsening_counter=0;
     tx_consecutively_coarsened=0;
     tx_current_coarsening_level=LOGICAL_CLOCK_MIN_ALLOWABLE_TX_SIZE;
     tx_monitor_next=false;
-    debugged=false;
     installSignalHandler();
 
     pid_t pid = syscall(SYS_getpid);
 
-
+    /* Get the current stack limit*/
     struct rlimit stack_limits;
     if (getrlimit(RLIMIT_STACK, &stack_limits)!=0){
         fprintf(stderr, "Getting stack size failed");
         ::abort();
     }
-    //if its less than stack
+
+    /*set the stack size to be the defined stack size*/
     if (stack_limits.rlim_cur > xdefines::STACK_SIZE && (stack_limits.rlim_max==RLIM_INFINITY || 
                                                          stack_limits.rlim_max > xdefines::STACK_SIZE)){
         stack_limits.rlim_cur=xdefines::STACK_SIZE;
@@ -143,30 +135,23 @@ public:
             ::abort();
         }
     }
-
+    
     if (!_initialized) {
       _initialized = true;
-
-      // xmemory::initialize should happen before others
       xmemory::initialize();
-
       xthread::setId(pid);
       _master_thread_id = pid;
       xmemory::setThreadIndex(0);
-
       determ::getInstance().initialize();
       xbitmap::getInstance().initialize();
-
       _thread_index = 0;
-
-      // Add myself to the token queue.
       determ::getInstance().registerMaster(_thread_index, pid);
     } else {
       fprintf(stderr, "xrun reinitialized");
       ::abort();
     }
-    clock_gettime(CLOCK_REALTIME, &ts1);
     determ_task_clock_activate();
+    //start this thread's clock
     startClock();
   }
 
@@ -201,9 +186,6 @@ public:
             //if we are a single thread, then we need to set the coarsening counter to 0 right here, since we won't mess with the token later
             if (singleActiveThread() && tx_coarsening_counter > 0){
                 endTXCoarsening();
-                //determ_task_clock_end_coarsened_tx();
-                //tx_coarsening_counter=0;
-                //tx_consecutively_coarsened=0;
             }
             //if tx_coarsening_counter is greater than 0, then we are inside a coarsened tx. IF thats the case then lets monitor what happens next. If we are the
             //next thread to grab the token, then lets bump up the allowable tx size by some amount
@@ -247,15 +229,8 @@ public:
       putToken();
   }
 
-
-
   static void finalize(void) {
     xmemory::finalize();
-    clock_gettime(CLOCK_REALTIME, &ts2);
-    //ignore the first thread
-    if (_thread_index > 0){
-      determ::getInstance().add_total_time(time_util_time_diff(&ts1,&ts2));
-    }
   }
 
   // @ Return the main thread's id.
@@ -326,14 +301,6 @@ public:
         determ_task_clock_close();
     }
 
-#ifdef LAZY_COMMIT 
-  static inline void forceThreadCommit(void * v) {
-    int pid;
-    pid = xthread::getThreadPid(v);
-    xmemory::forceCommit(pid);
-  }
-#endif
-
   /// @return the unique thread index.
   static inline int threadindex(void) {
     return _thread_index;
@@ -359,8 +326,6 @@ public:
         
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
 
-        _children_threads_count = 0;
-        _children_threads_count++;
         //now, lets initialize the thread so that there is not a race with it to get the token
         waitToken();
 #ifdef PRINT_SCHEDULE
@@ -527,6 +492,7 @@ public:
           putToken();
       }
 #else
+      //we are allowed to coarsen on the init
       if (!useTxCoarsening(0)){
           putToken();
       }
@@ -625,6 +591,7 @@ public:
   }
 
 
+    //stops the clock and ends any coarsening
     static void stopClockNoCoarsen(){
         stopClock();
         endTXCoarsening();
@@ -633,13 +600,10 @@ public:
     static void stopClock(size_t id){
         if (inCoarsenedTx()){
             determ_task_clock_stop_with_id_no_notify(id);
-            //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_STOP_CLOCK, (void *)_token_holding);        
         }
         else{
             determ_task_clock_stop_with_id(id);
-            //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_STOP_CLOCK_NOC, (void *)_token_holding);        
         }
-        //cout << "thread " << _thread_index << " " << determ_task_clock_read() << endl;
     }
 
     static void stopClock(void){
@@ -649,16 +613,11 @@ public:
     static void startClock(void){
         if (inCoarsenedTx()){
             determ_task_clock_start_no_notify();
-            //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_START_CLOCK, (void *)_token_holding);        
         }
         else{
             determ_task_clock_start();       
-            //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_START_CLOCK_NOC, (void *)_token_holding); 
         }
-
     }
-
-
 
     // If those threads sending out condsignal or condbroadcast,
     // we will use condvar here.
@@ -1133,7 +1092,6 @@ public:
     }
 
     static void commitAndUpdateMemory(){
-        commit_count++;
         fflush(stdout);
         uint32_t dirty_pages=xmemory::get_dirty_pages();
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_COMMIT, NULL);
