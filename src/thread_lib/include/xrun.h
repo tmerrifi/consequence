@@ -30,39 +30,25 @@
 
 // Common defines
 #include "xdefines.h"
-
 // threads
 #include "xthread.h"
-
 // memory
 #include "xmemory.h"
-
 // Heap Layers
 #include "heaplayers/util/sassert.h"
-
 #include "xatomic.h"
-
 // determinstic controls
 #include "determ.h"
-
 #include "xbitmap.h"
-
 #include "prof.h"
-
 #include "debug.h"
-
 #include "time_util.h"
-
 #include "stats.h"
-
 #include "logical_clock.h"
-
 #include "thread_pool.h"
-
+#include "conseq_malloc.h"
 #include <sys/resource.h>
-
 #include <determ_clock.h>
-
 #include <signal.h>
 
 #define MAX_SLEEP_COUNT 10
@@ -436,43 +422,19 @@ public:
 
     /* Heap-related functions. */
   static inline void * malloc(size_t sz) {
-      char * tmp = NULL;
-      void * ptr = xmemory::malloc(sz);
-      return ptr;
+      return conseq_malloc::malloc(sz);
   }
-
   static inline void * calloc(size_t nmemb, size_t sz) {
-    void * ptr = xmemory::malloc(nmemb * sz);
-    memset(ptr, 0, nmemb * sz);
-
-    return ptr;
+      return conseq_malloc::calloc(nmemb, sz);
   }
-
   static inline void free(void * ptr) {
-    determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);        
-    xmemory::free(ptr);
-    determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
+      return conseq_malloc::free(ptr);
   }
-
   static inline size_t getSize(void * ptr) {
-    return xmemory::getSize(ptr);
+      return conseq_malloc::getSize(ptr);
   }
-
   static inline void * realloc(void * ptr, size_t sz) {
-    void * newptr;
-    //fprintf(stderr, "realloc ptr %p sz %x\n", ptr, sz);
-    if (ptr == NULL) {
-      newptr = xmemory::malloc(sz);
-      return newptr;
-    }
-    if (sz == 0) {
-      xmemory::free(ptr);
-      return NULL;
-    }
-
-    newptr = xmemory::realloc(ptr, sz);
-    //fprintf(stderr, "realloc ptr %p sz %x\n", newptr, sz);
-    return newptr;
+      return conseq_malloc::realloc(ptr,sz);
   }
 
 
@@ -481,22 +443,12 @@ public:
       stopClock();
       waitToken();
       determ::getInstance().cond_init(cond);
-      commitAndUpdateMemory();
 #ifdef PRINT_SCHEDULE
       cout << "SCHED: COND INIT - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(cond) << endl;
       fflush(stdout);
 #endif
-
-#ifdef USE_SIMPLE_LOCKS
-      if (_lock_count==0){
-          putToken();
-      }
-#else
-      //we are allowed to coarsen on the init
-      if (!useTxCoarsening(0)){
-          putToken();
-      }
-#endif
+      commitAndUpdateMemory();
+      putToken();
       startClock();
   }
 
@@ -508,19 +460,14 @@ public:
   // Barrier support
   static int barrier_init(pthread_barrier_t *barrier, unsigned int count) {
       stopClock();
-      if (!_token_holding){
-          waitToken();
-              
-      }
+      waitToken();
       determ::getInstance().barrier_init(barrier, count);
 #ifdef PRINT_SCHEDULE
       cout << "SCHED: BARRIER INIT - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(barrier) << endl;
       fflush(stdout);
 #endif
-      if (!_token_holding){
-          commitAndUpdateMemory();
-          putToken();
-      }
+      commitAndUpdateMemory();
+      putToken();
       startClock();
       return 0;
   }
@@ -536,19 +483,14 @@ public:
       stopClock();
       waitToken();
       determ::getInstance().lock_init((void *)mutex);
-      commitAndUpdateMemory();
 #ifdef PRINT_SCHEDULE
       cout << "SCHED: MUTEX INIT - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(mutex) << endl;
       fflush(stdout);
 #endif
-
+      commitAndUpdateMemory();
       putToken();
       startClock();
       return 0;
-  }
-
-  static void waitFence(void) {
-    determ::getInstance().waitFence(_thread_index, false);
   }
 
     static u_int64_t fast_forward_clock(){
@@ -565,8 +507,8 @@ public:
 #endif
         return clockDiffReturn;
     }
-
-  static int waitToken(void) {
+    
+    static int waitToken(void) {
       struct timespec t1,t2;
       int spin_counter=0;
       if (!_token_holding){
@@ -654,10 +596,6 @@ public:
         }
 
         ticks+=fast_forward_clock();
-
-        if (ticks > (1<<30)){
-            cout << "WHAT???? " << ticks << " " << fast_forward_clock() << endl;
-        }
 
         return ticks;
     }
