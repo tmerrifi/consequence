@@ -671,8 +671,6 @@ public:
 
     if (_activation_counter!=local_activation_counter){
         determ_task_clock_on_wakeup();
-        //we need to order these writes
-        __asm__ __volatile__ ("mfence");
         //setting the _tokenpos to NULL will "release" it
         _tokenpos=NULL;
         add_atomic_event(threadindex, DEBUG_TYPE_TOKEN_FAILED, NULL);
@@ -732,9 +730,6 @@ public:
     if (considerForFastForward){
         _last_token_value=determ_task_clock_read();
     }
-
-    //we need to order these writes
-    __asm__ __volatile__ ("mfence");
     //setting the _tokenpos to NULL will "release" it
     _tokenpos=NULL;
     _last_putter=threadindex;
@@ -857,7 +852,6 @@ public:
     if (halted){
         determ_task_clock_activate();
     }
-    __asm__ __volatile__ ("mfence");
     //its important that this comes *after* the activation. The reason is because
     //we can't have a race to get the token next after the parent has woken up. The
     //parent needs to at least activate first and get back "in the running" before
@@ -867,7 +861,6 @@ public:
     unlock(); 
     if(toWaitToken) {
         getToken(myindex);
-        START_TIMER(serial);
     }
 
     return toWaitToken;
@@ -894,8 +887,6 @@ public:
         //setting this status so that we wait for the parent to wake up. We'll know this when
         //they either a) set the status to STATUS_JOINING or b) wake up and set the status to READY
         parent->status=STATUS_OTHERS_NEED_TO_WAIT;
-        //paranoia, but lets do it anyway
-        __asm__ __volatile__ ("mfence");
         // Waken up all threads waiting on _cond_join, but only the one waiting on this thread
         // can be waken up. Other thread will goto sleep again immediately.
         WRAP(pthread_cond_broadcast)(&_cond_join);
