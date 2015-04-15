@@ -78,12 +78,6 @@ enum debug_event_type{
     DEBUG_TYPE_STOP_CLOCK_NOC=33, DEBUG_TYPE_STOP_CLOCK=34, DEBUG_TYPE_START_CLOCK_NOC=35, DEBUG_TYPE_START_CLOCK=36, DEBUG_TYPE_START_COARSE=37, DEBUG_TYPE_END_COARSE=38
 };
 
-
-
-
-
-//const char * debug_event_type_names[] = { "TRANSACTION", "TOKEN_WAIT", "COMMIT", "TRAN_W_TOKEN", "ADJUST_CLOCK", "FORK", "COND_SIG", "COND_WAIT", "COND_WOKE_UP" };
-
 // We are using a circular double linklist to manage those alive threads.
 class determ {
 private:
@@ -330,8 +324,6 @@ private:
   pthread_mutexattr_t _mutexattr;
   pthread_mutexattr_t _mutexattr_tmp;
 
-  volatile size_t _barrierActive;
-
   // When one thread is created, it will wait until all threads are created.
   // The following two flag are used to indentify whether one thread can move on or not.
   volatile bool _childregistered;
@@ -366,9 +358,6 @@ private:
   int _waiting_child_threads[MAX_THREADS];
   int _waiting_child_count;
 
-  // how much active thread in the system.
-  size_t _maxthreadentries;
-
   // How many conditional variables in this system.
   // In fact, maybe we don't need this.
   size_t _condnum;
@@ -379,24 +368,16 @@ private:
   //some optimizations for barriers may race, this helps avoid this
   size_t _barrierUpdaters;
 
-  // Variables related to token pass and fence control
   volatile ThreadEntry *_tokenpos;
-  volatile size_t _maxthreads;
   volatile size_t _currthreads;
-  volatile bool _is_arrival_phase;
-  volatile size_t _alivethreads;
-  volatile size_t _total_wait_fence_num;
   //when one thread activates another, threads that think they are next
   //in line may no longer be. we set this flag when ever we activate someone
   volatile u_int64_t _activation_counter;
-
-  commit_stats * fence_wait_stats;
 
   unsigned long total_time;
   unsigned long total_commit_time;
   unsigned long total_wait_time;
   unsigned long commits;
-  unsigned long fence_wait_time;
 
   //last token value
   volatile u_int64_t _last_token_value;
@@ -415,20 +396,13 @@ private:
       total_time(0),
       total_commit_time(0),
       total_wait_time(0),
-      fence_wait_time(0),
       commits(0),
-      _maxthreads(0),
-      _total_wait_fence_num(0),
       _waiting_child_count(0),
       _currthreads(0),
-      _is_arrival_phase(false),
-      _alivethreads(0),
-      _maxthreadentries(MAX_THREADS),
       _tokenpos(NULL), 
       _activation_counter(0),
       _parentnotified(false), 
       _childregistered(false),
-      _barrierActive(0),
       master_thread_finished(false),
       variable_counter(0)
           {  }
@@ -463,8 +437,6 @@ public:
     WRAP(pthread_cond_init)(&_cond_parent, &_condattr);
     WRAP(pthread_cond_init)(&_cond_children, &_condattr);
     WRAP(pthread_cond_init)(&_cond_join, &_condattr);
-    //setup stats stuff
-    fence_wait_stats = new commit_stats();
     
     clock_gettime(CLOCK_REALTIME, &init_time);
 
@@ -516,20 +488,6 @@ public:
     total_time+=usecs;
   }
 
-  // Decrease the fence when one thread exits.
-  // We assume that the gobal lock is held now.
-  void decrFence(void) {
-    _maxthreads--;
-    if (_currthreads >= _maxthreads) {
-      // Change phase if necessary
-      if (_is_arrival_phase && _maxthreads != 0) {
-        _is_arrival_phase = false;
-        __asm__ __volatile__ ("mfence");
-      }
-      WRAP(pthread_cond_broadcast)(&cond);
-    }
-  }
-
   // pthread_cancel implementation, we are relying threadindex to find corresponding entry.
   bool cancel(int threadindex) {
       ThreadEntry * entry;
@@ -575,17 +533,6 @@ public:
       return isFound;
   }
   
-  // There is only one thread which are doing those synchronizations.
-  // Hence, there is no need to do those transaction start and end operations.
-  bool isSingleWorkingThread(void) {
-    return (_maxthreads == 1);
-  }
-
-  // All threads are exited now, there is only one thread left in the system.
-  bool isSingleAliveThread(void) {
-    return (_maxthreads == 1 && _alivethreads == 1);
-  }
-
   inline void add_event_commit_stats(int threadindex, int updated_pages, int merged_pages, int partial_updated_pages, int dirty_pages){        
 #ifdef EVENT_VIEWER
       EventEntry * entry = &_event_entries[threadindex];
@@ -644,16 +591,6 @@ public:
       return ((ThreadEntry *)_tokenpos == entry);
   }
 
-  // main function of waitFence and waitToken
-  // Here, we are defining two different paths.
-  // If the alive threads is smaller than the coresNumb, then we don't
-  // use those condwait, but busy waiting instead.
-  void waitFence(int threadindex, bool keepBitmap) {
-    int rv;
-    bool lastThread = false;
-    return;
-  }
-  
   int getTokenFromBarrier(int threadindex, void * barr){
       __getToken(threadindex, barr);
   }
@@ -830,9 +767,6 @@ public:
   // No need lock since the register is done before any spawning.
   void registerMaster(int threadindex, int pid) {
       registerThread(threadindex, pid, 0);
-      _maxthreads = 1;
-      _alivethreads = 1;
-      _is_arrival_phase = true; 
   }
 
   // Add this thread to the list.
@@ -952,16 +886,6 @@ public:
 
     lock();
     DEBUG("%d: Deregistering", getpid());
-    //fence_wait_stats->stats_pid_print_time("waitFence");
-
-    // Decrease number of alive threads and fence.
-    if(_alivethreads > 0) {
-      // Since this thread is running with the token, no need to modify 
-      _alivethreads--;
-    }
-
-    // Remove this thread entry from activelist.  
-    //removeEntry((Entry *) entry, &_activelist);
 
     freeThreadEntry(entry);
     
@@ -1322,18 +1246,36 @@ public:
 
 #else
 
+  //this function waits for barrier commiters to commit their stuff and optimistically updates their pagetable.
   void __wait_for_commiters(BarrierEntry * barr, unsigned long heapVersion, unsigned long globalsVersion){
+      //we wait around for a while unless everyone has arrived at the barrier
       int boundedWait=100000;
       int counter=0;
+      unsigned long newHeapVersion, newGlobalsVersion;
+      //wait for bit for others to commit
       while(counter<boundedWait && barr->committed<(barr->maxthreads-1)){
           counter++;
+          //if more than half the threads have arrived and the number of total dirty pages is
+          //low (less than 10 per thread)...we leave
           if (barr->committed > barr->maxthreads/2 && barr->total_dirty<barr->maxthreads*10){
               break;
           }
+          //otherwise, if a new version is available for either segment...get it
           else{
-              if (xmemory::get_current_heap_version() > heapVersion ||
-                  xmemory::get_current_globals_version() > globalsVersion){
+              //grab the new versions
+              newHeapVersion=xmemory::get_current_heap_version();
+              newGlobalsVersion=xmemory::get_current_globals_version();
+              //is there a new version?
+              if (newHeapVersion > heapVersion ||
+                  newGlobalsVersion > globalsVersion){
+                  //do an update
                   xmemory::update();
+                  //update the versions. There is a race here...its possible that by the time
+                  //we call update a new version has arrived and then our local variables will
+                  //not be synced up. I think that's fine. In the worst case we call update
+                  //an extra time or two.
+                  heapVersion=newHeapVersion;
+                  globalsVersion=newGlobalsVersion;
                   counter=0;
               }
           }
@@ -1345,12 +1287,9 @@ public:
       //we are committing in parallel, but may need to wait for previous versions to 
       //finish committing...these variables will track which version to wait for.
       unsigned long heapVersion, globalsVersion, ourHeapVersion, ourGlobalsVersion;
-      struct timespec t1,t2,t3,t4;
       //get the token
       getToken(threadindex);
       fflush(stdout);
-      //no other threads other than those arriving on this barrier can get the token
-      _barrierActive=(size_t)b;
       //increment the counter to mark our arrival
       barr->counter++;
       //what versions will we be waiting for when we perform the commit?
@@ -1406,7 +1345,6 @@ public:
       end_thread_event(threadindex, DEBUG_TYPE_BARRIER_WAIT);
       //everyone is done, the token holder just needs to clean up
       if(isTokenHolder(threadindex)){
-          _barrierActive=0;
           barr->counter=0;
           barr->heapVersion=0;
           barr->globalsVersion=0;
@@ -1429,7 +1367,6 @@ public:
 
 private:
   inline void * allocThreadEntry(int threadindex) {
-    assert(threadindex < _maxthreadentries);
     return (&_entries[threadindex]);
   }
 
