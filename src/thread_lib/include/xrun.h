@@ -869,13 +869,6 @@ public:
       //and leads into a barrier
       putToken();
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
-      //get the token and commit our changes (eventually do this in parallel)
-      //waitToken();
-      //determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_COMMIT);
-      //commitAndUpdateMemory();      
-      //determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_COMMIT);
-      //putToken();
-      //actually wait on the barrier
       determ::getInstance().barrier_wait(barrier, _thread_index);
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
 #ifdef USE_TAGGING
