@@ -634,7 +634,6 @@ public:
         struct local_copy_stats cs;
         bool isSingleActiveThread=false;
         int failure_count=0;
-        int deferred=0;
         _lock_count++;
         //should we use the tx coarsening?
         bool isUsingTxCoarsening=(useTxCoarsening((size_t)mutex) && allow_coarsening);
@@ -664,8 +663,7 @@ public:
             }
             //some one else is going to get the token now. We need to commit our changes to memory now since we may be a coarse tx
             if (failure_count==1){
-                //commitAndUpdateMemory(&cs);
-                commitAndUpdateDeferredStart();
+                commitAndUpdateMemory(&cs);
             }
             //reset the coarsening counter
             //tx_coarsening_counter=0;
@@ -683,9 +681,7 @@ public:
         }
         else if ((!isSingleActiveThread && !isUsingTxCoarsening)||shouldUpdate){
             //determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_COMMIT, mutex);
-            //commitAndUpdateMemory(&cs);
-            commitAndUpdateDeferredStart(&cs);
-            deferred=1;
+            commitAndUpdateMemory(&cs);
             ticks_to_add+=__ticks_to_add(&cs) + LOGICAL_CLOCK_TIME_LOCK;
 #ifdef DTHREADS_TASKCLOCK_DEBUG
             cout << "IN-LOCK for thread " << _thread_index << " pid " << getpid() << " partial " << cs.partial_unique << " dirty " << cs.dirty_pages << " merged " << 
@@ -711,10 +707,6 @@ public:
         //release the token if need be
         if (!isSingleActiveThread && !isUsingTxCoarsening){
             putToken();
-        }
-
-        if (deferred){
-            commitAndUpdateDeferredEnd();
         }
     }
 
@@ -995,31 +987,6 @@ public:
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
       startClock();
   }
-
-
-    static void commitAndUpdateDeferredStart(struct local_copy_stats * stats){
-#ifdef USE_DEFERRED_WORK
-        stats->dirty_pages = xmemory::get_dirty_pages();
-        commitAndUpdateDeferredStart();
-        stats->partial_unique = xmemory::get_partial_unique_pages();
-        stats->merged_pages = xmemory::get_merged_pages();
-        
-#else
-        commitAndUpdateMemory(stats);
-#endif
-    }
-
-
-    static void commitAndUpdateDeferredStart(){
-        xmemory::commit_deferred_start();
-    }
-
-
-    static void commitAndUpdateDeferredEnd(){
-#ifdef USE_DEFERRED_WORK
-        xmemory::commit_deferred_end();
-#endif
-    }
 
 
     static void commitAndUpdateMemory(struct local_copy_stats * stats){
