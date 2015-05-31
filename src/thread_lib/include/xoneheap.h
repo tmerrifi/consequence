@@ -174,6 +174,10 @@ public:
         getHeap()->set_local_version_tag(tag);
     }
 
+  void revert_heap_and_globals(){
+    getHeap()->revert_heap_and_globals();
+  }
+
 private:
 
   SourceHeap * getHeap(void) {

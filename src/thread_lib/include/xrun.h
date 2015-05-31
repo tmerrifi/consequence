@@ -19,7 +19,7 @@
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
   
-  You should have received a copy of the GNU General Public License
+  You should have received a coƒpy of the GNU General Public License
   along with this program; if not, write to the Free Software
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
@@ -34,6 +34,9 @@
 #include "xthread.h"
 // memory
 #include "xmemory.h"
+
+#include "checkpoint.h"
+
 // Heap Layers
 #include "heaplayers/util/sassert.h"
 #include "xatomic.h"
@@ -91,6 +94,9 @@ public:
 
   /// @brief Initialize the system.
   static void initialize(void) {
+
+    Checkpoint* _checkpoint = new Checkpoint();
+    cout << "HUH???" << endl;
     _initialized = false;
     _lock_count = 0;
     _token_holding = false;
