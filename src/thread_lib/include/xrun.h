@@ -71,6 +71,7 @@ private:
     static size_t _thread_index;
     static size_t _lock_count;
     static bool _token_holding;
+    static bool test;
 
     /******these variables keep track of some of the coarsening thread-local state*/
     static int tx_coarsening_counter;
@@ -78,6 +79,11 @@ private:
     static int tx_consecutively_coarsened;
     static bool tx_monitor_next;
     /************************************************/
+
+    //*************checkpoint*********************
+    static checkpoint* _checkpoint;
+    //********************************************
+
 
     /********Sleeping is done to make things easier on the Conversion garbage collector. 
     The GC is not concurrent, and does not collect versions that are newer than the oldest
@@ -94,9 +100,9 @@ public:
 
   /// @brief Initialize the system.
   static void initialize(void) {
-
-    Checkpoint* _checkpoint = new Checkpoint();
-    cout << "HUH???" << endl;
+    cout << "in initialize" << endl;
+    _checkpoint = new checkpoint();
+    // Checkpoint* _checkpoint = new Checkpoint();
     _initialized = false;
     _lock_count = 0;
     _token_holding = false;
@@ -242,13 +248,17 @@ public:
     int threads;
     struct timespec t1,t2;
 
-
     clock_gettime(CLOCK_MONOTONIC, &t1);
     // Get the global thread index for this thread, which will be used internally.
     //_thread_index = xatomic::increment_and_return(&global_data->thread_index);
     _thread_index = child_index;
     _lock_count = 0;
     _token_holding = false;
+
+    cout << "in register" << endl;
+    cout << "before calling constructor" << endl;
+    _checkpoint = new checkpoint();  
+    cout << "after calling constructor" << endl;
 
     xmemory::wake();
 #ifdef USE_TAGGING
@@ -727,7 +737,6 @@ public:
 #endif
 
     static void mutex_lock(pthread_mutex_t * mutex) {
-
         uint64_t clock1,clock2;        
         timespec t1,t2;
 
@@ -762,6 +771,19 @@ public:
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, mutex);        
         //*************END DEBUG CODE*********************
 
+        // *****************testing checkpoint******************
+        // make it happen 20% of times
+        // int random = rand() % 100;
+        // if (random < 20){
+        //   // cout << "calling checkpoint_begin, random is " << random << endl;
+        //   if(!_checkpoint->is_speculating){
+        //     cout << "calling checkpoint_begin, random is " << random << endl;
+        //     _checkpoint->checkpoint_begin();
+        //   }
+        //   cout << "begin done!" << endl;
+        //   cout << "next" << endl;
+        // }
+        // *****************************************************
     }
 
 
@@ -796,6 +818,16 @@ public:
 #else
     
   static void mutex_unlock(pthread_mutex_t * mutex) {
+        
+      // // *****************testing checkpoint******************
+      // int random = rand() % 100;
+      // if (_checkpoint->is_speculating && _checkpoint->ip != 0){
+      //   cout << "calling checkpoint_revert, random is " << random << endl;
+      //   _checkpoint->checkpoint_revert();
+      //   cout << "revert done!" << endl;
+      // }
+      // // *****************************************************
+
       //**************DEBUG CODE**************
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       //**************************************

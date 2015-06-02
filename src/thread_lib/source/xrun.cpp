@@ -1,3 +1,4 @@
+#include "checkpoint.h"
 #include "xrun.h"
 
 size_t xrun::_master_thread_id;
@@ -11,3 +12,4 @@ int xrun::tx_current_coarsening_level;
 int xrun::sleep_count;
 bool xrun::is_sleeping;
 bool xrun::tx_monitor_next;
+checkpoint* xrun::_checkpoint;
