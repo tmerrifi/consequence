@@ -13,3 +13,4 @@ int xrun::sleep_count;
 bool xrun::is_sleeping;
 bool xrun::tx_monitor_next;
 checkpoint* xrun::_checkpoint;
+int xrun::flag;

@@ -274,11 +274,8 @@ public:
 
     //revert heap and globals
     static inline void revert_heap_and_globals(){
-      cout << "inside revert_heap_and_globals" << endl;
       _pheap.revert_heap_and_globals();
-      cout << "heap" << endl;
       _globals.revert_heap_and_globals();
-      cout << "globals" << endl;
     }
 
 };

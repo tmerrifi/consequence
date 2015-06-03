@@ -83,7 +83,7 @@ private:
     //*************checkpoint*********************
     static checkpoint* _checkpoint;
     //********************************************
-
+    static int flag;
 
     /********Sleeping is done to make things easier on the Conversion garbage collector. 
     The GC is not concurrent, and does not collect versions that are newer than the oldest
@@ -101,8 +101,11 @@ public:
   /// @brief Initialize the system.
   static void initialize(void) {
     cout << "in initialize" << endl;
-    _checkpoint = new checkpoint();
-    // Checkpoint* _checkpoint = new Checkpoint();
+    flag = 0;
+
+    void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    _checkpoint = new (buf) checkpoint;
+
     _initialized = false;
     _lock_count = 0;
     _token_holding = false;
@@ -255,11 +258,9 @@ public:
     _lock_count = 0;
     _token_holding = false;
 
-    cout << "in register" << endl;
-    cout << "before calling constructor" << endl;
-    _checkpoint = new checkpoint();  
-    cout << "after calling constructor" << endl;
-
+    void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    _checkpoint = new (buf) checkpoint;
+    
     xmemory::wake();
 #ifdef USE_TAGGING
         xmemory::set_local_version_tag(0xDEAD);
@@ -773,16 +774,18 @@ public:
 
         // *****************testing checkpoint******************
         // make it happen 20% of times
-        // int random = rand() % 100;
-        // if (random < 20){
-        //   // cout << "calling checkpoint_begin, random is " << random << endl;
-        //   if(!_checkpoint->is_speculating){
-        //     cout << "calling checkpoint_begin, random is " << random << endl;
-        //     _checkpoint->checkpoint_begin();
-        //   }
-        //   cout << "begin done!" << endl;
-        //   cout << "next" << endl;
-        // }
+        int random = rand() % 100;
+        if (random < 10){
+            cout << "calling checkpoint_begin " << getpid() << endl;
+
+            _checkpoint->checkpoint_begin();
+            flag = 1;
+            // _checkpoint->checkpoint_revert();
+          cout << "begin done!" << endl;
+          cout << "random = " << random << endl;
+          cout <<"next" <<endl;
+          // cout << "flag after = " << flag << endl;
+        }
         // *****************************************************
     }
 
@@ -818,14 +821,16 @@ public:
 #else
     
   static void mutex_unlock(pthread_mutex_t * mutex) {
-        
+      
       // // *****************testing checkpoint******************
-      // int random = rand() % 100;
-      // if (_checkpoint->is_speculating && _checkpoint->ip != 0){
-      //   cout << "calling checkpoint_revert, random is " << random << endl;
-      //   _checkpoint->checkpoint_revert();
-      //   cout << "revert done!" << endl;
-      // }
+      int random = rand() % 100;
+      if (_checkpoint->is_speculating && _checkpoint->ip != 0 && random < 10 && flag == 1){
+        cout << "calling checkpoint_revert.......... " << getpid() << endl;
+        // flag = 2;
+        // cout << "flag = " << flag << endl; 
+        _checkpoint->checkpoint_revert();
+        cout << "revert done!..............." << endl;
+      }
       // // *****************************************************
 
       //**************DEBUG CODE**************
