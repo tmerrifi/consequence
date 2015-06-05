@@ -103,7 +103,7 @@ public:
     cout << "in initialize" << endl;
     flag = 0;
 
-    void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     _checkpoint = new (buf) checkpoint;
 
     _initialized = false;
@@ -258,9 +258,9 @@ public:
     _lock_count = 0;
     _token_holding = false;
 
-    void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     _checkpoint = new (buf) checkpoint;
-    
+
     xmemory::wake();
 #ifdef USE_TAGGING
         xmemory::set_local_version_tag(0xDEAD);
@@ -777,14 +777,14 @@ public:
         int random = rand() % 100;
         if (random < 10){
             cout << "calling checkpoint_begin " << getpid() << endl;
-
             _checkpoint->checkpoint_begin();
             flag = 1;
-            // _checkpoint->checkpoint_revert();
-          cout << "begin done!" << endl;
-          cout << "random = " << random << endl;
-          cout <<"next" <<endl;
-          // cout << "flag after = " << flag << endl;
+            // flag = 1;
+            cout << "begin done!" << endl;
+        }
+        else{
+
+          flag=0;
         }
         // *****************************************************
     }
@@ -824,12 +824,11 @@ public:
       
       // // *****************testing checkpoint******************
       int random = rand() % 100;
-      if (_checkpoint->is_speculating && _checkpoint->ip != 0 && random < 10 && flag == 1){
+      if (_checkpoint->is_speculating && random < 10 && flag == 1){
         cout << "calling checkpoint_revert.......... " << getpid() << endl;
-        // flag = 2;
         // cout << "flag = " << flag << endl; 
+        flag = 2;
         _checkpoint->checkpoint_revert();
-        cout << "revert done!..............." << endl;
       }
       // // *****************************************************
 

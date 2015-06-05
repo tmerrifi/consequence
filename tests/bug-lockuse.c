@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #ifndef THREADS
-#define THREADS 8
+#define THREADS 1
 #endif
 
 #define PAGE_SIZE (1<<12)
