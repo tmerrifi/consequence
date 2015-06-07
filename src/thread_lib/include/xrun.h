@@ -55,12 +55,6 @@
 
 class xrun {
 
-    //this is an internal data structure we use to pass around statistics about a commit
-    struct local_copy_stats{
-        int partial_unique;
-        int dirty_pages;
-        int merged_pages;
-    };
 
 private:
     static volatile bool _initialized;
@@ -87,6 +81,9 @@ private:
     static int sleep_count;
     static bool is_sleeping;
 
+    static uint64_t heapVersionToWaitFor;
+    static uint64_t globalsVersionToWaitFor;
+    
 public:
 
   /// @brief Initialize the system.
@@ -98,6 +95,9 @@ public:
     is_sleeping=false;
     tx_coarsening_counter=0;
     tx_consecutively_coarsened=0;
+    heapVersionToWaitFor=0;
+    globalsVersionToWaitFor=0;
+
     tx_current_coarsening_level=LOGICAL_CLOCK_MIN_ALLOWABLE_TX_SIZE;
     tx_monitor_next=false;
     installSignalHandler();
@@ -981,24 +981,30 @@ public:
       startClock();
   }
 
+    static void commitAndUpdateMemory(){
+        commitAndUpdateMemory(NULL);
+    }
 
     static void commitAndUpdateMemory(struct local_copy_stats * stats){
-        stats->dirty_pages = xmemory::get_dirty_pages();
-        commitAndUpdateMemory();
-        stats->partial_unique = xmemory::get_partial_unique_pages();
-        stats->merged_pages = xmemory::get_merged_pages();
+        determ::getInstance().commitInSerial(_thread_index,stats);
     }
 
-    static void commitAndUpdateMemory(){
-        fflush(stdout);
-        uint32_t dirty_pages=xmemory::get_dirty_pages();
-        determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_COMMIT, NULL);
-        xmemory::commit();
-        determ::getInstance().add_event_commit_stats(_thread_index, xmemory::get_updated_pages(), xmemory::get_merged_pages(), xmemory::get_partial_unique_pages(), dirty_pages);
-        determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_COMMIT);
+    static void commitAndUpdateMemoryParallelBegin(){
+        commitAndUpdateMemoryParallelBegin(NULL);
+    }
+    
+    static void commitAndUpdateMemoryParallelBegin(struct local_copy_stats * stats){
+        determ::getInstance().commitAndUpdateMemoryParallelBegin(_thread_index, stats, &heapVersionToWaitFor, &globalsVersionToWaitFor);
     }
 
-
+    static void commitAndUpdateMemoryParallelEnd(){
+        commitAndUpdateMemoryParallelEnd(NULL);
+    }
+        
+    static void commitAndUpdateMemoryParallelEnd(struct local_copy_stats * stats){
+        determ::getInstance().commitAndUpdateMemoryParallelEnd(_thread_index, stats, heapVersionToWaitFor, globalsVersionToWaitFor);
+    }
+    
     static void sigstopHandle(int signum, siginfo_t * siginfo, void * context) {
         stopClock();
         waitToken();

@@ -78,6 +78,14 @@ enum debug_event_type{
     DEBUG_TYPE_STOP_CLOCK_NOC=33, DEBUG_TYPE_STOP_CLOCK=34, DEBUG_TYPE_START_CLOCK_NOC=35, DEBUG_TYPE_START_CLOCK=36, DEBUG_TYPE_START_COARSE=37, DEBUG_TYPE_END_COARSE=38
 };
 
+//this is an internal data structure we use to pass around statistics about a commit
+struct local_copy_stats{
+    int partial_unique;
+    int dirty_pages;
+    int merged_pages;
+};
+
+
 // We are using a circular double linklist to manage those alive threads.
 class determ {
 private:
@@ -389,6 +397,12 @@ private:
 
   volatile int variable_counter;
 
+  /*these are set when we begin a commit, while we are holding the token. Any commit
+    that comes after these will have to wait for these versions to have finished being
+    serialized by Conversion*/
+  volatile uint64_t last_committed_globals_version;
+  volatile uint64_t last_committed_heap_version;
+  
  determ():
   _condnum(0),
       _barriernum(0),
@@ -581,11 +595,102 @@ public:
 #endif
   }
 
-
-  inline void commitAndUpdate(){
-      xmemory::commit();
+  //increment the globals version if there are some dirty pages and we're going to commit something
+  inline void incrementCurrentGlobalsVersion(){
+      if (xmemory::get_dirty_pages_globals()>0){
+          last_committed_globals_version++;
+      }
+  }
+  //increment the heap version if there are some dirty pages and we're going to commit something
+  inline void incrementCurrentHeapVersion(){
+      if (xmemory::get_dirty_pages_heap()>0){
+          last_committed_heap_version++;
+      }
   }
 
+  /*******xmemory has similar functions but these are the system-wide version numbers, as oppossed to xmemory's which
+          are for the calling process*******/
+  inline uint64_t getCurrentHeapVersion(){
+      return last_committed_heap_version;
+  }
+  inline uint64_t getCurrentGlobalsVersion(){
+      return last_committed_globals_version;
+  }
+  /**************/
+
+  inline void commitInSerial(int tid, struct local_copy_stats * stats){
+      fflush(stdout);
+      if (!isTokenHolder(tid)){
+          cout << "error: need to hold the token when committing" << endl;
+          exit(-1);
+      }
+      uint32_t dirty_pages=xmemory::get_dirty_pages();
+      if (stats){
+          stats->dirty_pages = dirty_pages;
+      }
+      determ::getInstance().start_thread_event(tid, DEBUG_TYPE_COMMIT, NULL);
+      //need to set the current globals/heap version number for those using parallel commit
+      incrementCurrentGlobalsVersion();
+      incrementCurrentHeapVersion();
+      xmemory::commit();
+      if (xmemory::get_current_heap_version()!=determ::getInstance().getCurrentHeapVersion()){
+          cout << "heap versions are not synced up"<< endl;
+          exit(-1);
+      }
+      if (xmemory::get_current_globals_version()!=determ::getInstance().getCurrentGlobalsVersion()){
+          cout << "globals versions are not synced up"<< endl;
+          exit(-1);
+      }
+      if (stats){
+          stats->partial_unique = xmemory::get_partial_unique_pages();
+          stats->merged_pages = xmemory::get_merged_pages();
+      }
+      
+      determ::getInstance().add_event_commit_stats(tid, xmemory::get_updated_pages(), xmemory::get_merged_pages(), xmemory::get_partial_unique_pages(), dirty_pages);
+      determ::getInstance().end_thread_event(tid, DEBUG_TYPE_COMMIT);
+  }
+
+  inline void commitAndUpdateMemoryParallelBegin(int tid, struct local_copy_stats * stats, uint64_t * heap_version_to_wait_for, uint64_t * globals_version_to_wait_for){
+      fflush(stdout);
+      if (!isTokenHolder(tid)){
+          cout << "error: need to hold the token when committing" << endl;
+          exit(-1);
+      }
+      start_thread_event(tid, DEBUG_TYPE_COMMIT, NULL);
+      //pass these back so the caller can do the parallel commit later
+      *heap_version_to_wait_for=last_committed_heap_version;
+      *globals_version_to_wait_for=last_committed_globals_version;
+      //update the last_committed*
+      incrementCurrentGlobalsVersion();
+      incrementCurrentHeapVersion();
+      if (stats){
+          stats->dirty_pages=xmemory::get_dirty_pages();
+      }
+      end_thread_event(tid, DEBUG_TYPE_COMMIT);
+  }
+
+  
+  inline void commitAndUpdateMemoryParallelEnd(int tid, struct local_copy_stats * stats, uint64_t heap_version_to_wait_for, uint64_t globals_version_to_wait_for){
+      //no reason not to be holding the token here
+      if (isTokenHolder(tid)){
+          cout << "error: shoudl not hold the token when committing in parallel" << endl;
+          exit(-1);
+      }
+      uint32_t dirty_pages=xmemory::get_dirty_pages();
+      start_thread_event(tid, DEBUG_TYPE_COMMIT, NULL);
+      if (stats){
+          stats->dirty_pages=xmemory::get_dirty_pages();
+      }
+      xmemory::commit_parallel(heap_version_to_wait_for, globals_version_to_wait_for);
+      if (stats){
+          stats->partial_unique = xmemory::get_partial_unique_pages();
+          stats->merged_pages = xmemory::get_merged_pages();
+      }
+      add_event_commit_stats(tid, xmemory::get_updated_pages(), xmemory::get_merged_pages(), xmemory::get_partial_unique_pages(), dirty_pages);
+      end_thread_event(tid, DEBUG_TYPE_COMMIT);
+  }
+
+  
   bool isTokenHolder(int threadindex){
       ThreadEntry * entry = &_entries[threadindex];
       return ((ThreadEntry *)_tokenpos == entry);
@@ -983,11 +1088,13 @@ public:
     LockEntry * entry = (LockEntry *)getSyncEntry(mutex);
     if(entry == NULL) {
         //commit and update, in case someone already initialized the lock
-        commitAndUpdate();
+        //commitAndUpdateMemory(threadindex,NULL);
+        commitInSerial(threadindex,NULL);
         if ((entry=(LockEntry *)getSyncEntry(mutex))==NULL){
             entry = lock_init(mutex);
             //its safe to do this here because we're holding the token, or we're in single threaded mode
-            commitAndUpdate();
+            //commitAndUpdateMemory(threadindex,NULL);
+            commitInSerial(threadindex,NULL);
         }
     }
     if(entry->is_acquired == true)  {
@@ -1197,7 +1304,8 @@ public:
       BarrierEntry * barr = (BarrierEntry *)getSyncEntry(b);
       getToken(threadindex);
       start_thread_event(threadindex, DEBUG_TYPE_COMMIT, b);
-      commitAndUpdate();
+      //commitAndUpdateMemory(threadindex,NULL);
+      commitInSerial(threadindex,NULL);
       end_thread_event(threadindex, DEBUG_TYPE_COMMIT);
       start_thread_event(threadindex, DEBUG_TYPE_BARRIER_WAIT, b);
 #ifdef TOKEN_ORDER_ROUND_ROBIN
@@ -1227,7 +1335,8 @@ public:
           barr->counter=0;
       }
       start_thread_event(threadindex, DEBUG_TYPE_COMMIT, b);
-      commitAndUpdate();
+      //commitAndUpdateMemory(threadindex,NULL);
+      commitInSerial(threadindex,NULL);
       end_thread_event(threadindex, DEBUG_TYPE_COMMIT);
 #ifdef TOKEN_ORDER_ROUND_ROBIN
       determ_task_clock_add_ticks(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY);

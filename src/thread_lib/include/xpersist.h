@@ -263,29 +263,30 @@ public:
 
 
 private:
-  /// True if current xpersist.h is a heap.
-  bool _isHeap;
 
-  /// The starting address of the region.
-  void * const _startaddr;
+    /// True if current xpersist.h is a heap.
+    bool _isHeap;
+    
+    /// The starting address of the region.
+    void * const _startaddr;
+    
+    /// The size of the region.
+    const size_t _startsize;
+    
+    /// The file descriptor for the backing store.
+    int _backingFd;
+    
+    Type * _snapMemory;
+    conv_seg * snap_memory;
+    
+    bool _isProtected;
+    
+    unsigned int _trans;
+    
+    /// The length of the version array.
+    enum {  TotalPageNums = NElts * sizeof(Type) / (xdefines::PageSize) };
 
-  /// The size of the region.
-  const size_t _startsize;
-
-  /// The file descriptor for the backing store.
-  int _backingFd;
-
-  Type * _snapMemory;
-  conv_seg * snap_memory;
-
-  bool _isProtected;
-
-  unsigned int _trans;
-
-  /// The length of the version array.
-  enum {  TotalPageNums = NElts * sizeof(Type) / (xdefines::PageSize) };
-
-  int _threadindex;
+    int _threadindex;
 };
 
 #endif
