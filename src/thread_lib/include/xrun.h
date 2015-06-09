@@ -775,11 +775,11 @@ public:
         // *****************testing checkpoint******************
         // make it happen 20% of times
         int random = rand() % 100;
-        if (random < 10){
+        if (random < 20){
             cout << "calling checkpoint_begin " << getpid() << endl;
             _checkpoint->checkpoint_begin();
+            cout << "spec = " << boolalpha << _checkpoint->is_speculating<<endl;
             flag = 1;
-            // flag = 1;
             cout << "begin done!" << endl;
         }
         else{
@@ -824,10 +824,8 @@ public:
       
       // // *****************testing checkpoint******************
       int random = rand() % 100;
-      if (_checkpoint->is_speculating && random < 10 && flag == 1){
+      if (_checkpoint->is_speculating && random < 20 && flag == 1){
         cout << "calling checkpoint_revert.......... " << getpid() << endl;
-        // cout << "flag = " << flag << endl; 
-        flag = 2;
         _checkpoint->checkpoint_revert();
       }
       // // *****************************************************
