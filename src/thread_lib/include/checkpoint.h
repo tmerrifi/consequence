@@ -157,9 +157,9 @@ private:
  		cout << "after update" << endl;
 
  		//failed = true
- 		__asm__ __volatile__ ("movq $1, 0x78(%%r13);" : :);
+ 		__asm__ __volatile__ ("movb $1, 0x78(%%r13);" : :);
  		//is_speculating = false
- 		__asm__ __volatile__ ("movq $0, 0x6400090(%%r13);" : :);
+ 		__asm__ __volatile__ ("movb $0, 0x6400090(%%r13);" : :);
  		
 
  		__asm__ __volatile__("movq %0, %%r13;": : "r" (this));
@@ -170,7 +170,7 @@ private:
  		__asm__ __volatile__ ("movq 0x20(%%r13), %%rdx;" : :);
  		__asm__ __volatile__ ("movq 0x28(%%r13), %%rcx;" : :);
  		__asm__ __volatile__ ("movq 0x30(%%r13), %%r8;" : :);
- 		__asm__ __volatile__ ("movq 0x30(%%r13), %%r9;" : : );
+ 		__asm__ __volatile__ ("movq 0x38(%%r13), %%r9;" : : );
 
  		__asm__ __volatile__ ("movq 0x40(%%r13), %%rax;" : :);
  		__asm__ __volatile__ ("movq 0x48(%%r13), %%r10;" : :);
