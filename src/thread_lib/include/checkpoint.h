@@ -151,8 +151,10 @@ private:
 
  		// revert globals and heap
  		xmemory::revert_heap_and_globals();
+ 		cout << "after revert_heap_and_globals" << endl;
 
- 		xmemory::update();
+ 		// xmemory::update();
+ 		cout << "after update" << endl;
 
  		//failed = true
  		__asm__ __volatile__ ("movq $1, 0x78(%%r13);" : :);
@@ -164,7 +166,7 @@ private:
 
 		//restore registers
  		__asm__ __volatile__ ("movq 0x10(%%r13), %%rdi;" : :);
- 		__asm__ __volatile__ ("movq 0x10(%%r13), %%rsi;" : :);
+ 		__asm__ __volatile__ ("movq 0x18(%%r13), %%rsi;" : :);
  		__asm__ __volatile__ ("movq 0x20(%%r13), %%rdx;" : :);
  		__asm__ __volatile__ ("movq 0x28(%%r13), %%rcx;" : :);
  		__asm__ __volatile__ ("movq 0x30(%%r13), %%r8;" : :);

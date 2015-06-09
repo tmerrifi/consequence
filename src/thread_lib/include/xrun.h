@@ -778,12 +778,11 @@ public:
         if (random < 20){
             cout << "calling checkpoint_begin " << getpid() << endl;
             _checkpoint->checkpoint_begin();
-            cout << "spec = " << boolalpha << _checkpoint->is_speculating<<endl;
+            cout << "spec if = " << boolalpha << _checkpoint->is_speculating<<endl;
             flag = 1;
             cout << "begin done!" << endl;
         }
         else{
-
           flag=0;
         }
         // *****************************************************
