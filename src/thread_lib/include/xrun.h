@@ -690,7 +690,6 @@ public:
 
     static void mutex_lock(pthread_mutex_t * mutex) {
 
-        uint64_t clock1,clock2;        
         timespec t1,t2;
 
         //**************DEBUG CODE**************
@@ -698,7 +697,6 @@ public:
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
         //*************END DEBUG CODE*********************
 
-        clock1=determ_task_clock_read();
         stopClock();
         //*****DEBUG CODE************************/
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
