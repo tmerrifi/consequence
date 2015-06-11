@@ -607,6 +607,11 @@ public:
     }
 
 
+    static bool __should_speculate(){
+
+        
+    }
+    
     
     static void __mutex_lock_inner(pthread_mutex_t * mutex, bool allow_coarsening) {
         struct local_copy_stats cs;
@@ -614,7 +619,7 @@ public:
         int failure_count=0;
         _lock_count++;
         //should we use the tx coarsening?
-        bool isUsingTxCoarsening=(useTxCoarsening((size_t)mutex) && allow_coarsening);
+        bool isUsingTxCoarsening= !isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
 #ifdef DTHREADS_TASKCLOCK_DEBUG
         cout << "LOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read() << " pid " << getpid() << endl;
 #endif
@@ -622,7 +627,22 @@ public:
         //if we are using kendo, we have to keep retrying and incrementing
         //if we aren't using kendo, this is just initialized to zero
         int ticks_to_add=0;
-        isSingleActiveThread=singleActiveThread();
+        isSingleActiveThread= !isSpeculating && singleActiveThread();
+        //We can't speculate when we are using coarsening, because we are already holding the lock and that
+        //doesn't make much sense.
+        if (!isUsingTxCoarsening && !isSingleActiveThread && __should_speculate()){
+            //add the lock to a list of locks we are speculating on
+
+            if (!isSpeculating){
+                
+                //locally track the last time we released the token
+
+                //take a checkpoint
+            }
+       }
+
+        
+        
         //get the token, assuming its not just us and we don't already own it
         if ((!isSingleActiveThread && !_token_holding) || failure_count>0) {
             waitToken();
@@ -749,6 +769,7 @@ public:
       //******This needs to happen AFTER we get the token!!!*****
       bool commitForWaitingThread=(determ::getInstance().lock_waiters_count(mutex) > 0 && !isUsingTxCoarsening);
 
+      //*****DEBUG CODE************************/
       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_UNLOCK, mutex);
       //*************END DEBUG CODE*********************
       if ((!singleActiveThread() && !isUsingTxCoarsening) || shouldUpdate || commitForWaitingThread){
