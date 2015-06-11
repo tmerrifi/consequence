@@ -606,36 +606,8 @@ public:
         return ticks;
     }
 
-#ifdef USE_SIMPLE_LOCKS
-    static void __mutex_lock_inner(pthread_mutex_t * mutex, bool allow_coarsening) {
-        //we only need to update if we don't currently have the token. This is to optimize for nested locks
-        bool need_to_update=false;
-        if (!_token_holding){
-            need_to_update=true;
-        }
-        waitToken();
-        _lock_count++;
-#ifdef TOKEN_ORDER_ROUND_ROBIN
-        determ_task_clock_add_ticks(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY);
-#endif
-        //lets actually get the "real" lock, which is really just setting a flag
-        bool getLock=determ::getInstance().lock_acquire(mutex,_thread_index);
-        if (!getLock){
-            cout << "Something weird happened" << endl;
-        }
-        if (need_to_update){
-            commitAndUpdateMemory();
-        }
-#ifdef PRINT_SCHEDULE
-      cout << "SCHED: MUTEX LOCK - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(mutex) << endl;
-      fflush(stdout);
-#endif
 
-        determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_LOCK, (void *)_token_holding);
-    }
-
-
-#else
+    
     static void __mutex_lock_inner(pthread_mutex_t * mutex, bool allow_coarsening) {
         struct local_copy_stats cs;
         bool isSingleActiveThread=false;
@@ -716,8 +688,6 @@ public:
         }
     }
 
-#endif
-
     static void mutex_lock(pthread_mutex_t * mutex) {
 
         uint64_t clock1,clock2;        
@@ -757,36 +727,6 @@ public:
     }
 
 
-#ifdef USE_SIMPLE_LOCKS
-
-    static void mutex_unlock(pthread_mutex_t * mutex) {
-        determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
-        stopClock((size_t)mutex);
-        if (!_token_holding){
-            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_UNLOCK, mutex);
-        }
-        else{
-            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_UNLOCK+100, mutex);
-        }
-        _lock_count--;
-        determ::getInstance().lock_release(mutex,_thread_index);
-#ifdef PRINT_SCHEDULE
-      cout << "SCHED: MUTEX UNLOCK - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(mutex) << endl;
-      fflush(stdout);
-#endif
-
-        if (_lock_count==0){
-            commitAndUpdateMemory();
-#ifdef TOKEN_ORDER_ROUND_ROBIN
-            determ_task_clock_add_ticks(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY);
-#endif
-            putToken();
-        }
-        startClock();
-    }
-    
-#else
-    
   static void mutex_unlock(pthread_mutex_t * mutex) {
       //**************DEBUG CODE**************
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
@@ -856,8 +796,6 @@ public:
       //*************END DEBUG CODE*********************
       startClock();
   }
-
-#endif
 
     
   static int mutex_destroy(pthread_mutex_t * mutex) {
