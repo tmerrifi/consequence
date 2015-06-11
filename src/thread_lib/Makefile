@@ -12,6 +12,11 @@ ifeq ($(CONSEQ_TYPE),IC)
 	BINARY_NAME = libconsequence_IC.so
 endif
 
+ifeq ($(CONSEQ_TYPE),ICPlain)
+	CONSEQ_FLAGS = -DFAST_FORWARD -DUSE_USERSPACE_READING -DUSE_DEFERRED_WORK #-DEVENT_VIEWER
+	BINARY_NAME = libconsequence_IC.so
+endif
+
 ifeq ($(CONSEQ_TYPE),RR)
 	CONSEQ_FLAGS = -DSINGLE_THREAD_OPT -DUSE_TX_COARSENING -DUSE_USERSPACE_READING -DUSE_DEFERRED_WORK -DTOKEN_ORDER_ROUND_ROBIN
 	BINARY_NAME = libconsequence_RR.so
@@ -28,7 +33,7 @@ endif
 
 CXX = g++
 
-CFLAGS32 = -g -march=core2 -mtune=core2 -msse3 $(LIB_ARCH) -DSSE_SUPPORT -O3 -shared -fPIC -DLOCK_OWNERSHIP -DDETERM_MEMORY_ALLOC -DNDEBUG -D'CUSTOM_PREFIX(x)=grace\#\#x' -L/usr/lib32 $(CONSEQ_FLAGS) 
+CFLAGS32 = -g -march=core2 -mtune=core2 -msse3 $(LIB_ARCH) -DSSE_SUPPORT -O3 -shared -fPIC -DDETERM_MEMORY_ALLOC -DNDEBUG -D'CUSTOM_PREFIX(x)=grace\#\#x' -L/usr/lib32 $(CONSEQ_FLAGS) 
 
 LIBS = -ldl -lpthread -lDetermTaskClock -lksnap
 
@@ -38,7 +43,7 @@ $(BINARY_NAME): $(SRCS) $(DEPS) Makefile
 	$(CXX) $(CFLAGS32) $(INCLUDE_DIRS) $(SRCS) -o $(BINARY_NAME) $(LIBS); \
 	cp $(BINARY_NAME) libconsequence.so;\
 	sudo cp libconsequence.so /usr/local/lib;
-
+	sudo ldconfig;
 clean:
 	rm -f *.so 
 

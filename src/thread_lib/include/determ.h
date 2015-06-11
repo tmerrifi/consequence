@@ -55,6 +55,7 @@
 #include "prof.h"
 #include "stats.h"
 #include "logical_clock.h"
+#include "syncstats.h"
 #include <determ_clock.h>
 #include <sched.h>
 
@@ -282,9 +283,10 @@ private:
   class SyncVarEntry{
   public:
       int id;
+      syncStats stats;
   };
 
-  class LockEntry : SyncVarEntry {
+  class LockEntry :public SyncVarEntry {
     public:
       // Status of lock, aquired or not.
       volatile bool is_acquired;
@@ -297,7 +299,7 @@ private:
   
 
   // condition variable entry
-  class CondEntry : SyncVarEntry {
+  class CondEntry : public SyncVarEntry {
   public:
     size_t waiters; // How many waiters on this cond.
     void * cond;    // original cond address
@@ -306,7 +308,7 @@ private:
   };
 
   // barrier entry
-  class BarrierEntry : SyncVarEntry {
+  class BarrierEntry : public SyncVarEntry {
    public:
      volatile size_t maxthreads;
      volatile size_t threads;
@@ -1102,6 +1104,7 @@ public:
     }
     else{
         entry->is_acquired = true;
+        entry->stats.endSync(determ_task_clock_read());
         //add_atomic_event(threadindex, DEBUG_TYPE_MUTEX_LOCK, mutex);
         return true;
     }
@@ -1479,6 +1482,7 @@ private:
   
   inline void * allocSyncEntry(int size) {
       SyncVarEntry * syncEntry = (SyncVarEntry *)InternalHeap::getInstance().malloc(size);
+      syncEntry->stats.init();
 #ifdef PRINT_SCHEDULE
       syncEntry->id=variable_counter++;
 #endif
