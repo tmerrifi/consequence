@@ -60,6 +60,18 @@
 #include "internalheap.h"
 // Encapsulates all memory spaces (globals & heap).
 
+#define CONV_REVERT 512
+
+#if __x86_64__
+/* 64-bit */
+#define __CONV_SYS_CALL 303
+
+#else
+
+#define __CONV_SYS_CALL 341
+
+#endif
+
 class xmemory {
 private:
   /// The globals region.
@@ -260,7 +272,15 @@ public:
         _globals.set_local_version_tag(tag);
     }
 
+    //revert heap and globals
+    static inline void revert_heap_and_globals(){
+      _pheap.revert_heap_and_globals();
+      _globals.revert_heap_and_globals();
+    }
+
 };
 
 #endif
 //08048710q
+
+// asmlinkage long sys_conversion_sync(unsigned long start, int flags, size_t editing_distance);

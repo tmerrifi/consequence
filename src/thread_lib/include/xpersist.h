@@ -160,6 +160,10 @@ public:
         return partial_pages;
     }
 
+    void revert_heap_and_globals(){
+      conv_revert(snap_memory);
+    }
+
 
   void setThreadIndex(int index) {
     _threadindex = index;
