@@ -638,7 +638,15 @@ public:
                 //locally track the last time we released the token
 
                 //take a checkpoint
+                if (checkpoint.checkpoint_begin() == false){
+                    isSpeculating = false;
+                    //flush the list of locks
+                }
+                else{
+                    return;
+                }
             }
+            
        }
 
         
@@ -646,6 +654,9 @@ public:
         //get the token, assuming its not just us and we don't already own it
         if ((!isSingleActiveThread && !_token_holding) || failure_count>0) {
             waitToken();
+        }
+        if(isSpeculating && !speculative_verification(_list_of_locks, _last_time_we_released)){
+                Checkpoint.Checkpoint_revert();
         }
         //even if we are using coarsening, we may need to update before we hold on to the token and keep going
         //***this needs to happen AFTER we get the token
