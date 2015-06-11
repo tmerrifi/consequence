@@ -2,12 +2,6 @@
 #ifndef LOGICAL_CLOCK_H
 #define LOGICAL_CLOCK_H
 
-#ifdef USE_KENDO
-#define KENDO_ACQ_INC 10000
-#else
-#define KENDO_ACQ_INC 0
-#endif
-
 #ifdef TOKEN_ORDER_ROUND_ROBIN
 
 #define LOGICAL_CLOCK_TIME_LOCK 0

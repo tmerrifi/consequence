@@ -621,7 +621,7 @@ public:
     retry:
         //if we are using kendo, we have to keep retrying and incrementing
         //if we aren't using kendo, this is just initialized to zero
-        int ticks_to_add=KENDO_ACQ_INC;
+        int ticks_to_add=0;
         isSingleActiveThread=singleActiveThread();
         //get the token, assuming its not just us and we don't already own it
         if ((!isSingleActiveThread && !_token_holding) || failure_count>0) {
@@ -629,6 +629,7 @@ public:
         }
         //even if we are using coarsening, we may need to update before we hold on to the token and keep going
         //***this needs to happen AFTER we get the token
+        //Keep in mind, we do this after we acquire the lock, because we don't want to perform multiple updates
         bool shouldUpdate=(_thread_index!=determ::getInstance().getLastTokenPutter());
         //lets actually get the "real" lock, which is really just setting a flag
         bool getLock=determ::getInstance().lock_acquire(mutex,_thread_index);
@@ -639,38 +640,28 @@ public:
                 cout << "ERROR: Lock failed with single active thread..." << endl;
                 exit(-1);
             }
-            //some one else is going to get the token now. We need to commit our changes to memory now since we may be a coarse tx
+            //some one else is going to get the token now. We need to commit our changes to memory now since
+            //we may be a coarse tx
             if (failure_count==1){
                 commitAndUpdateMemory(&cs);
             }
             //reset the coarsening counter
-            //tx_coarsening_counter=0;
             endTXCoarsening();
             isUsingTxCoarsening=false;
-#ifdef USE_KENDO
-            //need to add ticks for Kendo
-            determ_task_clock_add_ticks(ticks_to_add);
-            putToken();
-#else
             determ::getInstance().wait_on_lock_and_release_token(mutex, _thread_index);
             _token_holding=false;
-#endif
             goto retry;
         }
         else if ((!isSingleActiveThread && !isUsingTxCoarsening)||shouldUpdate){
-            //determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_COMMIT, mutex);
             commitAndUpdateMemory(&cs);
             ticks_to_add+=__ticks_to_add(&cs) + LOGICAL_CLOCK_TIME_LOCK;
 #ifdef DTHREADS_TASKCLOCK_DEBUG
-            cout << "IN-LOCK for thread " << _thread_index << " pid " << getpid() << " partial " << cs.partial_unique << " dirty " << cs.dirty_pages << " merged " << 
-                cs.merged_pages << " fast forward " << fast_forward_clock() << " total ticks " << ticks_to_add << endl;          
+            cout << "IN-LOCK for thread " << _thread_index << " pid " << getpid()
+                 << " partial " << cs.partial_unique << " dirty " << cs.dirty_pages << " merged "
+                 << cs.merged_pages << " fast forward " << fast_forward_clock() << " total ticks " << ticks_to_add << endl;          
 #endif
-            //determ::getInstance().add_event_commit_stats(_thread_index, xmemory::get_updated_pages(), cs.merged_pages, cs.partial_unique, cs.dirty_pages);
-            //determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_COMMIT);
-            //important LoC, since if the lock is taken this will ensure progress
             determ_task_clock_add_ticks(ticks_to_add);
         }
-
         
 #ifdef TOKEN_ORDER_ROUND_ROBIN
         determ_task_clock_add_ticks(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY);
