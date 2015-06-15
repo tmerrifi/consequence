@@ -1,1 +1,0 @@
-cmd_/home/sepideh/consequence/src/logical_clock/module/task_clock.o := ld -m elf_x86_64   -r -o /home/sepideh/consequence/src/logical_clock/module/task_clock.o /home/sepideh/consequence/src/logical_clock/module/clock_main.o /home/sepideh/consequence/src/logical_clock/module/bounded_tso.o 

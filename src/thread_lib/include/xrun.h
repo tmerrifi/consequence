@@ -73,6 +73,10 @@ private:
     static bool tx_monitor_next;
     /************************************************/
 
+    //*************checkpoint*********************
+    static checkpoint* _checkpoint;
+    //********************************************
+
     /********Sleeping is done to make things easier on the Conversion garbage collector. 
     The GC is not concurrent, and does not collect versions that are newer than the oldest
     version currently held. In the event that the main thread creates some children, and then
@@ -92,8 +96,9 @@ public:
   /// @brief Initialize the system.
   static void initialize(void) {
 
-    Checkpoint* _checkpoint = new Checkpoint();
-    cout << "HUH???" << endl;
+    void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    _checkpoint = new (buf) checkpoint;
+
     _initialized = false;
     _lock_count = 0;
     _token_holding = false;
@@ -249,6 +254,9 @@ public:
     _thread_index = child_index;
     _lock_count = 0;
     _token_holding = false;
+
+    void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    _checkpoint = new (buf) checkpoint;
 
     xmemory::wake();
 #ifdef USE_TAGGING

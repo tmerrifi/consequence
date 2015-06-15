@@ -1,1 +1,0 @@
-cmd_/home/sepideh/consequence/src/logical_clock/module/task_clock.ko := ld -r -m elf_x86_64 -T /home/sepideh/conversion_linux/scripts/module-common.lds --build-id  -o /home/sepideh/consequence/src/logical_clock/module/task_clock.ko /home/sepideh/consequence/src/logical_clock/module/task_clock.o /home/sepideh/consequence/src/logical_clock/module/task_clock.mod.o

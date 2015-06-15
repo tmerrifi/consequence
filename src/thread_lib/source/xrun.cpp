@@ -1,3 +1,4 @@
+#include "checkpoint.h"
 #include "xrun.h"
 
 size_t xrun::_master_thread_id;
@@ -14,3 +15,4 @@ bool xrun::tx_monitor_next;
 uint64_t xrun::heapVersionToWaitFor;
 uint64_t xrun::globalsVersionToWaitFor;
 
+checkpoint* xrun::_checkpoint;
