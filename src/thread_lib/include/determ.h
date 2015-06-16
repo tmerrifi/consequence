@@ -1062,7 +1062,7 @@ public:
     }
     else{
         entry->is_acquired = true;
-        entry->stats.endSync(determ_task_clock_read());
+        //entry->stats.endSync(determ_task_clock_read());
         //add_atomic_event(threadindex, DEBUG_TYPE_MUTEX_LOCK, mutex);
         return true;
     }

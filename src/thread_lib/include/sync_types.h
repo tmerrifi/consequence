@@ -49,7 +49,6 @@ class BarrierEntry : public SyncVarEntry {
 
   inline void * allocSyncEntry(int size) {
       SyncVarEntry * syncEntry = (SyncVarEntry *)InternalHeap::getInstance().malloc(size);
-      syncEntry->stats.init();
       syncEntry->last_committed=0;
 #ifdef PRINT_SCHEDULE
       syncEntry->id=variable_counter++;
@@ -63,15 +62,15 @@ class BarrierEntry : public SyncVarEntry {
       }
   }
 
-  void * getSyncEntry(void * entry) {
+  inline void * getSyncEntry(void * entry) {
     return(*((void **)entry));
   }
 
-  void setSyncEntry(void * origentry, void * newentry) {
+  inline void setSyncEntry(void * origentry, void * newentry) {
       *((size_t *)origentry)=(size_t)newentry;
   }
 
-  void clearSyncEntry(void * origentry) {
+  inline void clearSyncEntry(void * origentry) {
     void **dest = (void**)origentry;
 
     *dest = NULL;

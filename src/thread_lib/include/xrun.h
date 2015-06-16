@@ -50,6 +50,7 @@
 #include "logical_clock.h"
 #include "thread_pool.h"
 #include "conseq_malloc.h"
+#include "speculation.h"
 #include <sys/resource.h>
 #include <determ_clock.h>
 #include <signal.h>
@@ -73,7 +74,7 @@ private:
     static bool tx_monitor_next;
     /************************************************/
 
-    //*************checkpoint*********************
+    //*************object for speculation*********************
     static speculation * _speculation;
     //********************************************
 
@@ -90,6 +91,8 @@ private:
 
     static uint64_t heapVersionToWaitFor;
     static uint64_t globalsVersionToWaitFor;
+
+    static uint64_t _last_token_release_time;
     
 public:
 
@@ -588,6 +591,7 @@ public:
         if (_token_holding){
             // release the token and pass the token to next.
             //fprintf(stderr, "%d: putToken\n", _thread_index);
+            _last_token_release_time=determ_task_clock_read();
             determ::getInstance().putToken(_thread_index);
             _token_holding=false;
         }
@@ -621,7 +625,7 @@ public:
         int failure_count=0;
         _lock_count++;
         //should we use the tx coarsening?
-        bool isUsingTxCoarsening= !isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
+        bool isUsingTxCoarsening= !_speculation->isSpeculating() && useTxCoarsening((size_t)mutex) && allow_coarsening;
 #ifdef DTHREADS_TASKCLOCK_DEBUG
         cout << "LOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read() << " pid " << getpid() << endl;
 #endif
@@ -629,14 +633,14 @@ public:
         //if we are using kendo, we have to keep retrying and incrementing
         //if we aren't using kendo, this is just initialized to zero
         int ticks_to_add=0;
-        isSingleActiveThread= !isSpeculating && singleActiveThread();
+        isSingleActiveThread= !_speculation->isSpeculating() && singleActiveThread();
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
-        if (!isUsingTxCoarsening && !isSingleActiveThread && _speculation->shouldSpeculate()){
+        if (!isUsingTxCoarsening && !isSingleActiveThread && _speculation->shouldSpeculate(mutex)){
 
             //Here we begin or continue speculation...in the event that a speculation is reverted we will
             //return false and continue on
-            if (_speculation->speculate()==true){
+            if (_speculation->speculate(mutex,_last_token_release_time)==true){
                 return;
             }
        }
@@ -695,6 +699,13 @@ public:
         fflush(stdout);
 #endif
 
+        if (_speculation->isSpeculating()){
+            _speculation->finish(determ_task_clock_read());
+        }
+        else{
+            _speculation->updateLastCommittedTime(mutex,determ_task_clock_read());
+        }
+        
         //release the token if need be
         if (!isSingleActiveThread && !isUsingTxCoarsening){
             putToken();
@@ -811,8 +822,10 @@ public:
 
     
   static int mutex_destroy(pthread_mutex_t * mutex) {
-    determ::getInstance().lock_destroy(mutex);
-    return 0;
+      cout << "NOT CURRENTLY SUPPORTED" << endl;
+      exit(-1);
+      //determ::getInstance().lock_destroy(mutex);
+      return 0;
   }
 
   // Add the barrier support.

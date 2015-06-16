@@ -2,13 +2,15 @@
 #define CONSEQ_SPECULATION_H
 
 #include "checkpoint.h"
+#include "sync_types.h"
 
-#define SPECULATION_ENTRIES_MAX 100;
+#define SPECULATION_ENTRIES_MAX 100
 
 class speculation{
     
  private:
     class speculation_entry{
+    public:
         SyncVarEntry * entry;
         uint64_t acquisition_logical_time;
     };
@@ -16,10 +18,16 @@ class speculation{
     speculation_entry entries[SPECULATION_ENTRIES_MAX];
     uint32_t entries_count;
     uint64_t logical_clock_start;
-    checkpoint checkpoint;
+    checkpoint _checkpoint;
 
     inline bool verify_synchronization(){
-        
+        for (int i=0;i<entries_count;i++){
+            SyncVarEntry * entry = entries[i].entry;
+            if (entry->last_committed > logical_clock_start){
+                return false;
+            }
+        }
+        return true;
     }
     
  public:
@@ -30,11 +38,13 @@ class speculation{
         }
         entries_count=0;
         logical_clock_start=0;
-        is_speculating=false;
     }
     
-    inline bool shouldSpeculate(SyncVarEntry * entry){
-        if (entries_count>=SPECULATION_ENTRIES_MAX){
+    inline bool shouldSpeculate(void * entry_ptr){
+        //in the event that the sync variable has not yet been initialized, just
+        //forget the speculation for now
+        if (entries_count>=SPECULATION_ENTRIES_MAX ||
+            getSyncEntry(entry_ptr)==NULL){
             return false;
         }
         else{
@@ -43,17 +53,22 @@ class speculation{
         }
     }
 
-    inline bool speculate(SyncVarEntry * entry, uint64_t logical_clock){
+    inline bool speculate(void * entry_ptr, uint64_t logical_clock){
         if (entries_count>=SPECULATION_ENTRIES_MAX){
             cout << "Too many speculative entries " << endl;
+            exit(-1);
+        }
+        SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
+        if (entry==NULL){
+            cout << "SyncVarEntry is null " << endl;
             exit(-1);
         }
         entries_count++;
         entries[entries_count].entry=entry;
         entries[entries_count].acquisition_logical_time=logical_clock;
-        if (!checkpoint.is_speculating){
+        if (!_checkpoint.is_speculating){
             logical_clock_start=logical_clock;
-            return checkpoint.checkpoint_begin();
+            return _checkpoint.checkpoint_begin();
         }
         else{
             return true;
@@ -62,7 +77,7 @@ class speculation{
     }
 
     inline bool isSpeculating(){
-        return checkpoint.is_speculating;
+        return _checkpoint.is_speculating;
     }
 
     
@@ -70,10 +85,23 @@ class speculation{
         if (isSpeculating() && !verify_synchronization()){
             entries_count=0;
             //do what we need to do
-            checkpoint.checkpoint_revert();
+            _checkpoint.checkpoint_revert();
         }
     }
-    
+
+    inline void finish(uint64_t logical_clock){
+        for (int i=0;i<entries_count;i++){
+            SyncVarEntry * entry = entries[i].entry;
+            entry->last_committed=logical_clock;
+        }
+        entries_count=0;
+        _checkpoint.is_speculating=false;
+    }
+
+    inline void updateLastCommittedTime(void * entry_ptr, uint64_t logical_clock){
+        SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
+        entry->last_committed=logical_clock;
+    }
 };
 
 #endif

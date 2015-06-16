@@ -1,4 +1,4 @@
-#include "checkpoint.h"
+#include "speculation.h"
 #include "xrun.h"
 
 size_t xrun::_master_thread_id;
@@ -14,5 +14,6 @@ bool xrun::is_sleeping;
 bool xrun::tx_monitor_next;
 uint64_t xrun::heapVersionToWaitFor;
 uint64_t xrun::globalsVersionToWaitFor;
+uint64_t xrun::_last_token_release_time;
 
-checkpoint* xrun::_checkpoint;
+speculation * xrun::_speculation;
