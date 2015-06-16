@@ -74,7 +74,7 @@ private:
     /************************************************/
 
     //*************checkpoint*********************
-    static checkpoint* _checkpoint;
+    static speculation * _speculation;
     //********************************************
 
     /********Sleeping is done to make things easier on the Conversion garbage collector. 
@@ -96,8 +96,8 @@ public:
   /// @brief Initialize the system.
   static void initialize(void) {
 
-    void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    _checkpoint = new (buf) checkpoint;
+    void* buf = mmap(NULL, sizeof(speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    _speculation = new (buf) speculation;
 
     _initialized = false;
     _lock_count = 0;
@@ -255,8 +255,8 @@ public:
     _lock_count = 0;
     _token_holding = false;
 
-    void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    _checkpoint = new (buf) checkpoint;
+    //void* buf = mmap(NULL, sizeof(checkpoint), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    _speculation = new (_speculation) speculation;
 
     xmemory::wake();
 #ifdef USE_TAGGING
@@ -615,12 +615,6 @@ public:
     }
 
 
-    static bool __should_speculate(){
-
-        
-    }
-    
-    
     static void __mutex_lock_inner(pthread_mutex_t * mutex, bool allow_coarsening) {
         struct local_copy_stats cs;
         bool isSingleActiveThread=false;
@@ -638,34 +632,23 @@ public:
         isSingleActiveThread= !isSpeculating && singleActiveThread();
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
-        if (!isUsingTxCoarsening && !isSingleActiveThread && __should_speculate()){
-            //add the lock to a list of locks we are speculating on
+        if (!isUsingTxCoarsening && !isSingleActiveThread && _speculation->shouldSpeculate()){
 
-            if (!isSpeculating){
-                
-                //locally track the last time we released the token
-
-                //take a checkpoint
-                if (checkpoint.checkpoint_begin() == false){
-                    isSpeculating = false;
-                    //flush the list of locks
-                }
-                else{
-                    return;
-                }
+            //Here we begin or continue speculation...in the event that a speculation is reverted we will
+            //return false and continue on
+            if (_speculation->speculate()==true){
+                return;
             }
-            
        }
-
         
         
         //get the token, assuming its not just us and we don't already own it
         if ((!isSingleActiveThread && !_token_holding) || failure_count>0) {
             waitToken();
         }
-        if(isSpeculating && !speculative_verification(_list_of_locks, _last_time_we_released)){
-                Checkpoint.Checkpoint_revert();
-        }
+
+        _speculation->validate();
+        
         //even if we are using coarsening, we may need to update before we hold on to the token and keep going
         //***this needs to happen AFTER we get the token
         //Keep in mind, we do this after we acquire the lock, because we don't want to perform multiple updates
