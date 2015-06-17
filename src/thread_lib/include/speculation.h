@@ -40,7 +40,7 @@ class speculation{
         logical_clock_start=0;
     }
     
-    inline bool shouldSpeculate(void * entry_ptr){
+    inline bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock){
         //in the event that the sync variable has not yet been initialized, just
         //forget the speculation for now
         if (entries_count>=SPECULATION_ENTRIES_MAX ||
@@ -53,6 +53,13 @@ class speculation{
         }
     }
 
+
+    //called by code that is not adding a new sync var to the current
+    //set of entries
+    inline bool shouldSpeculate(uint64_t logical_clock){
+        return true;
+    }
+    
     inline bool speculate(void * entry_ptr, uint64_t logical_clock){
         if (entries_count>=SPECULATION_ENTRIES_MAX){
             cout << "Too many speculative entries " << endl;

@@ -636,7 +636,7 @@ public:
         isSingleActiveThread= !_speculation->isSpeculating() && singleActiveThread();
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
-        if (!isUsingTxCoarsening && !isSingleActiveThread && _speculation->shouldSpeculate(mutex)){
+        if (!isUsingTxCoarsening && !isSingleActiveThread && _speculation->shouldSpeculate(mutex, determ_task_clock_read())){
 
             //Here we begin or continue speculation...in the event that a speculation is reverted we will
             //return false and continue on
@@ -757,8 +757,8 @@ public:
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
       //*************END DEBUG CODE*********************
       stopClock((size_t)mutex);
-      bool isSingleActiveThread=singleActiveThread();
-      bool isUsingTxCoarsening=useTxCoarsening(0);
+      bool isSingleActiveThread=!_speculation->isSpeculating() && singleActiveThread();
+      bool isUsingTxCoarsening=!_speculation->isSpeculating() && useTxCoarsening(0);
 #ifdef DTHREADS_TASKCLOCK_DEBUG
       cout << "starting unlock " << _thread_index << " " << determ_task_clock_read() << " pid " << getpid() << endl;
 #endif
@@ -767,11 +767,18 @@ public:
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
       //******************************************/
 
+      if (_speculation->isSpeculating() && _speculation->shouldSpeculate(determ_task_clock_read())){
+          return;
+      }
+      
       //if we're not the only one around, grab the token
       if (!isSingleActiveThread && !_token_holding){
           //get the token
           waitToken();
       }
+
+      _speculation->validate();
+      
       //even if we are using coarsening, we may need to update before we hold on to the token and keep going
       //***this needs to happen AFTER we get the token*******
       bool shouldUpdate=(_thread_index!=determ::getInstance().getLastTokenPutter());
@@ -803,6 +810,14 @@ public:
       cout << "SCHED: MUTEX UNLOCK - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(mutex) << endl;
       fflush(stdout);
 #endif
+
+      if (_speculation->isSpeculating()){
+          _speculation->finish(determ_task_clock_read());
+      }
+      else{
+          _speculation->updateLastCommittedTime(mutex,determ_task_clock_read());
+      }
+      
       if (!isSingleActiveThread && !isUsingTxCoarsening){
           //release the token
           putToken();
