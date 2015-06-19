@@ -5,14 +5,14 @@
 #include <stdint.h>
 
 #ifndef THREADS
-#define THREADS 8
+#define THREADS 2
 #endif
 
 #define PAGE_SIZE (1<<12)
 #define PAGES 20
 #define NUM_OF_PAGES (PAGES - (PAGES % THREADS))
 #define NUM_OF_BYTES (PAGE_SIZE * NUM_OF_PAGES)
-#define ITERATIONS 150
+#define ITERATIONS 10 //150
 
 uint8_t mem[NUM_OF_BYTES];
 int counter=0;
@@ -54,6 +54,7 @@ void * child_thread(void * data)
         pthread_mutex_lock(&g_lock);
         /* Do 1ms computation work. */
         ++counter;
+        printf("*********** child_thread CS ******* %d i = %d\n", getpid(), i);
         /* Page access */
         pthread_mutex_unlock(&g_lock);
     }
