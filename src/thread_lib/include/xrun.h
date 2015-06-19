@@ -279,13 +279,14 @@ public:
     return (_thread_index);
   }
 
-  static inline void threadDeregister(void) {
+  static void threadDeregister(void) {
       stopClock();
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
 #ifdef DTHREADS_TASKCLOCK_DEBUG
       cout << "thread deregister " << determ_task_get_id() << " count " << determ_task_clock_read() << " pid " << getpid() << endl;
 #endif
       waitToken();
+      _speculation->validate();
       commitAndUpdateMemory();
       if (determ::getInstance().is_master_thread_finisehd()){
           ThreadPool::getInstance().set_exit_by_id(_thread_index);
@@ -316,7 +317,7 @@ public:
     }
 
   /// @brief Spawn a thread.
-    static inline void * spawn(threadFunction * fn, void * arg, pthread_t * tid) {
+    static void * spawn(threadFunction * fn, void * arg, pthread_t * tid) {
         //we use this to designate the "end" of the user's stack. This i
         uint8_t end_of_user_stack_marker;
 
@@ -331,6 +332,7 @@ public:
 
         //now, lets initialize the thread so that there is not a race with it to get the token
         waitToken();
+        _speculation->validate();
 #ifdef PRINT_SCHEDULE
         cout << "SCHED: CREATING THREAD - tid: " << _thread_index << endl;
         fflush(stdout);
@@ -364,7 +366,7 @@ public:
     }
     
   /// @brief Wait for a thread.
-  static inline void join(void * v, void ** result) {
+  static void join(void * v, void ** result) {
     int  child_threadindex = 0;
     bool wakeupChildren = false;
 
@@ -382,7 +384,7 @@ public:
     // synchronization after spawning, other thread should wait for 
     // the notification from me.
     waitToken();
-    
+    _speculation->validate();
     commitAndUpdateMemory();
 
     // Get the joinee's thread index.
@@ -422,10 +424,11 @@ public:
   }
 
   /// @brief Do a pthread_cancel
-  static inline void cancel(void *v) {
+  static void cancel(void *v) {
     int threadindex;
     stopClockNoCoarsen();
     waitToken();
+    _speculation->validate();
     commitAndUpdateMemory();
     threadindex = xthread::cancel(v);
     determ::getInstance().cancel(threadindex);
@@ -642,6 +645,9 @@ public:
             //return false and continue on
             if (_speculation->speculate(mutex,_last_token_release_time)==true){
                 return;
+            }
+            else{
+              cout << "faile speculation in lock " << getpid() << endl;
             }
        }
         
@@ -875,6 +881,9 @@ public:
       if (acquiringToken){
           waitToken();
       }
+
+      _speculation->validate();
+
       commitAndUpdateMemory();
       
       //TODO: We need a better solution for this...this is embarassing :)
@@ -917,6 +926,7 @@ public:
       bool acquiringToken=(!_token_holding);
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       waitToken();
+      _speculation->validate();
       commitAndUpdateMemory();
       //**************DEBUG CODE**************
       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_COND_SIG, cond);
@@ -944,6 +954,7 @@ public:
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       if (acquiringToken){
           waitToken();
+          _speculation->validate();
           commitAndUpdateMemory();
       }
       //**************DEBUG CODE**************
