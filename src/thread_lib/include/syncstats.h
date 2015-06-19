@@ -9,14 +9,13 @@ class syncStats{
     uint64_t lastSyncEnd;
 
  public:
-    void init(){
+    syncStats(){
         meanInterCSTime=0;
         lastSyncEnd=0;
     }
     
     void endSync(uint64_t currentTime){
         meanInterCSTime = (1.0 - SYNCSTATS_EWMA_ALPHA)*meanInterCSTime + SYNCSTATS_EWMA_ALPHA*(currentTime-lastSyncEnd);
-        //cout << "last " << lastSyncEnd << " current " << currentTime << " meanInterCSTime " << meanInterCSTime << endl;
         lastSyncEnd=currentTime;
     }
 

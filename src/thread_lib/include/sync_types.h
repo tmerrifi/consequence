@@ -1,12 +1,15 @@
 #ifndef CONSEQ_SYNC_TYPES_H
 #define CONSEQ_SYNC_TYPES_H
 
+#include "xmemory.h"
 #include "list.h"
+#include "syncstats.h"
 
 class SyncVarEntry{
  public:
     int id;
     uint64_t last_committed;
+    syncStats * stats;
 };
 
 class LockEntry :public SyncVarEntry {
@@ -50,6 +53,8 @@ class BarrierEntry : public SyncVarEntry {
   inline void * allocSyncEntry(int size) {
       SyncVarEntry * syncEntry = (SyncVarEntry *)InternalHeap::getInstance().malloc(size);
       syncEntry->last_committed=0;
+      void * statsMem=xmemory::malloc(sizeof(syncStats));
+      syncEntry->stats = new (statsMem) syncStats();
 #ifdef PRINT_SCHEDULE
       syncEntry->id=variable_counter++;
 #endif
