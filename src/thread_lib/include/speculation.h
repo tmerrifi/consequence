@@ -70,9 +70,9 @@ class speculation{
             cout << "SyncVarEntry is null " << endl;
             exit(-1);
         }
-        entries_count++;
         entries[entries_count].entry=entry;
         entries[entries_count].acquisition_logical_time=logical_clock;
+        entries_count++;
         if (!_checkpoint.is_speculating){
             logical_clock_start=logical_clock;
             return _checkpoint.checkpoint_begin();
