@@ -65,8 +65,6 @@ void * checkpoint::find_stack_top(void){
 	}
 
  	bool checkpoint::checkpoint_begin(){
- 		cout << "begin " << getpid() << endl;
-
  		//find the size of the stack
  		char bottom_of_stack;
  		size_t stack_size = stack_start - (size_t) &bottom_of_stack;
@@ -75,7 +73,7 @@ void * checkpoint::find_stack_top(void){
  		memcpy(stack_copy, (void*) (stack_start - stack_size), stack_size);
 
  		is_speculating = true;
-
+                failed=false;
  		//store registers
  		__asm__ __volatile__("movq %%rbp, %0;": "=r"(ebp));
  		__asm__ __volatile__("movq %%rdi, %0;": "=r"(rdi));
@@ -94,26 +92,23 @@ void * checkpoint::find_stack_top(void){
  		__asm__ __volatile__("movq %%r15, %0;": "=r"(r15));
 
  		__asm__ __volatile__("movq %0, %%r13;": : "r" (this): "memory");
- 		// __asm__ __volatile__("movq %%rsp, %0;": "=r"(esp));
+ 		__asm__ __volatile__("movq %%rsp, %0;": "=r"(esp));
 
     	__asm__ __volatile__ ("label:");
 
 		__asm__ __volatile__ ("movq 0x68(%%r13), %%r15;" : :);
  		__asm__ __volatile__ ("movq 0x70(%%r13), %%r14;" : :);
 
-    	bool _failed;
+                bool _failed;
  		__asm__ __volatile__("movb 0x78(%%r13), %0;": "=r"(_failed));
 
 		return (_failed ? false : true);
  	}
 
  	void checkpoint::checkpoint_revert(){
- 		cout << "revert " << getpid() << "stack_start " << hex << stack_start << endl;
 
  		// revert globals and heap
  		xmemory::revert_heap_and_globals();
- 		cout << "after revert_heap_and_globals" << endl;
-
  		__asm__ __volatile__("movq %0, %%r13;": : "r" (this) : "memory");
 
  		//failed = true
@@ -122,10 +117,7 @@ void * checkpoint::find_stack_top(void){
  		__asm__ __volatile__ ("movb $0, 0x6400090(%%r13);" : :);
 		
 		//restore registers
- 		__asm__ __volatile__ ("movq 0x10(%%r13), %%rdi;" : :);
- 		__asm__ __volatile__ ("movq 0x18(%%r13), %%rsi;" : :);
  		__asm__ __volatile__ ("movq 0x20(%%r13), %%rdx;" : :);
- 		__asm__ __volatile__ ("movq 0x28(%%r13), %%rcx;" : :);
  		__asm__ __volatile__ ("movq 0x30(%%r13), %%r8;" : :);
  		__asm__ __volatile__ ("movq 0x38(%%r13), %%r9;" : : );
 
@@ -133,14 +125,18 @@ void * checkpoint::find_stack_top(void){
  		__asm__ __volatile__ ("movq 0x48(%%r13), %%r10;" : :);
  		__asm__ __volatile__ ("movq 0x50(%%r13), %%r11;" : :);
  		__asm__ __volatile__ ("movq 0x58(%%r13), %%r12;" : :);
- 		__asm__ __volatile__("movq 0(%%r13), %%r15;": : : "memory"); // ebp
- 		// __asm__ __volatile__("movq 0x8(%%r13), %%r14;": :); //esp
+ 		__asm__ __volatile__ ("movq 0(%%r13), %%r15;": : : "memory"); // ebp
+ 		__asm__ __volatile__("movq 0x8(%%r13), %%r14;": :); //esp
 
  		//memcpy
  		__asm__ volatile ( "cld\n\t" "rep movsb" : : "S" (stack_copy), "D" (stack_start - stack_size_at_checkpoint_begin), "c" (stack_size_at_checkpoint_begin) );
 
+                __asm__ __volatile__ ("movq 0x10(%%r13), %%rdi;" : :);
+ 		__asm__ __volatile__ ("movq 0x18(%%r13), %%rsi;" : :);
+ 		__asm__ __volatile__ ("movq 0x28(%%r13), %%rcx;" : :);
+                
  		__asm__ __volatile__ ("movq %r15, %rbp");
- 		// __asm__ __volatile__ ("movq %r14, %rsp");
+ 		__asm__ __volatile__ ("movq %r14, %rsp");
 
  		//jmp to IP
  		__asm__ __volatile__ ("jmp label");
