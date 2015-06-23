@@ -647,7 +647,7 @@ public:
                 return;
             }
             else{
-              cout << "faile speculation in lock " << getpid() << endl;
+              cout << "LOCK: faile speculation" << getpid() << endl;
             }
        }
         

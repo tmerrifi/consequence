@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #ifndef THREADS
-#define THREADS 2
+#define THREADS 1
 #endif
 
 #define PAGE_SIZE (1<<12)
@@ -73,9 +73,14 @@ int main(int argc,char**argv)
 	  pthread_create (&waiters[i], NULL, child_thread, (void *)&(thread_id[i]));
 	}
 
+    int main_id = THREADS;
+    child_thread((void *)&(main_id));
+
+    printf("after child_thread\n");
+
 	for(i = 0; i < THREADS; i++)
 		pthread_join (waiters[i], NULL);
-
+        printf("after join\n");
         validate(counter);
 
         if (counter==ITERATIONS*THREADS && failures==0){
