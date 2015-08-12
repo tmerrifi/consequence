@@ -218,6 +218,12 @@ public:
     static inline int get_logical_pages(){
         return _pheap.get_logical_pages() + _globals.get_logical_pages();
     }
+
+    static inline void * get_heap_start(){
+        return _pheap.get_segment_start();
+    }
+
+
     
     static inline int sleep(){
         _pheap.sleep();
@@ -229,6 +235,11 @@ public:
         _globals.wake();
     }
 
+
+    static inline void checkpoint(){
+        _pheap.checkpoint();
+        _globals.checkpoint();
+    }
 
     static inline void commit() {
         _pheap.checkandcommit();

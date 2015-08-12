@@ -15,7 +15,6 @@
 using namespace std;
 
 void * checkpoint::find_stack_top(void){
-		cout << "find stack" << endl;
 		void	*start;
 		void	*end;
 		char i[4096];
@@ -58,7 +57,6 @@ void * checkpoint::find_stack_top(void){
 
 
 	checkpoint::checkpoint(){
-		cout << "constructor" << endl;
 		failed = false;
 		is_speculating = false;
 		stack_start = (size_t) find_stack_top();
@@ -67,6 +65,7 @@ void * checkpoint::find_stack_top(void){
  	bool checkpoint::checkpoint_begin(){
  		//find the size of the stack
  		char bottom_of_stack;
+                xmemory::checkpoint();
  		size_t stack_size = stack_start - (size_t) &bottom_of_stack;
  		stack_size_at_checkpoint_begin = stack_size;
 
@@ -96,11 +95,15 @@ void * checkpoint::find_stack_top(void){
 
     	__asm__ __volatile__ ("label:");
 
-		__asm__ __volatile__ ("movq 0x68(%%r13), %%r15;" : :);
- 		__asm__ __volatile__ ("movq 0x70(%%r13), %%r14;" : :);
+		__asm__ __volatile__ ("movq 0x70(%%r13), %%r15;" : :);
+ 		__asm__ __volatile__ ("movq 0x68(%%r13), %%r14;" : :);
 
                 bool _failed;
  		__asm__ __volatile__("movb 0x78(%%r13), %0;": "=r"(_failed));
+
+                /*cout << "check_begin " << _failed << " r15test " << r15test << " r15 " << r15 << " r14 " << r14 << " pid " << getpid() << " "
+                     << this << " &r15 " << &r15 << " &r14 " << &r14 << " r13 " << r13test << " " << *((unsigned long *)(((unsigned char *)this)+0x70)) <<
+                     " " << ((unsigned long *)(((unsigned char *)this)+0x70)) << endl;*/
 
 		return (_failed ? false : true);
  	}

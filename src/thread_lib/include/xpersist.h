@@ -227,6 +227,10 @@ public:
         conv_commit_and_update(snap_memory);
     }
 
+    inline void checkpoint(){
+        conv_checkpoint(snap_memory);
+    }
+    
     inline void commit_parallel(int versionToWaitFor){
         while(conv_get_linearized_version_num(snap_memory)<versionToWaitFor){
             Pause();
@@ -265,6 +269,9 @@ public:
 #endif
     }
 
+    inline void * get_segment_start(){
+        return snap_memory->segment;
+    }
 
 private:
 

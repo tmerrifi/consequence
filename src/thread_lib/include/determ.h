@@ -750,7 +750,7 @@ public:
     end_thread_event(threadindex, DEBUG_TYPE_TOKEN_WAIT);
 
 #ifdef DTHREADS_TASKCLOCK_DEBUG
-    cout << "GET TOKEN: acquired token, " << threadindex << " clock " << determ_task_clock_read() << endl;
+    cout << "GET TOKEN: acquired token, " << threadindex << " clock " << determ_task_clock_read() << " " << getpid() << endl;
 #endif
 
     return 0;
@@ -1030,11 +1030,22 @@ public:
       //No one acquire the lock in the beginning.
       entry->is_acquired = false;
       // No one is the owner.
+      entry->owner=MAX_THREADS;
       setSyncEntry(mutex, (void *)entry); 
       entry->head=NULL;
       pthread_condattr_setpshared(&_condattr, PTHREAD_PROCESS_SHARED);
       WRAP(pthread_cond_init)(&entry->cond, &_condattr);
       return entry;
+  }
+
+  inline bool lock_is_current_owner(void * mutex, int threadindex){
+      LockEntry * entry = (LockEntry *)getSyncEntry(mutex);
+      if (entry == NULL){
+          return false;
+      }
+      else{
+          return (entry->owner==threadindex);
+      }
   }
   
   void lock_destroy(void * mutex) {
@@ -1062,6 +1073,7 @@ public:
     }
     else{
         entry->is_acquired = true;
+        entry->owner=threadindex;
         //entry->stats.endSync(determ_task_clock_read());
         //add_atomic_event(threadindex, DEBUG_TYPE_MUTEX_LOCK, mutex);
         return true;
@@ -1085,6 +1097,7 @@ public:
     lock();
     //add_atomic_event(threadindex, DEBUG_TYPE_MUTEX_UNLOCK, mutex);
     entry->is_acquired = false;
+    entry->owner=MAX_THREADS;
     if (entry->waiters>0){
         //need to notify the next thread
         ThreadEntry * waitingThread = (ThreadEntry *)removeHeadEntry(&entry->head);
@@ -1441,16 +1454,16 @@ private:
   }
   
   inline LockEntry *allocLockEntry(void) {
-    //fprintf(stderr, "%d: alloc lock entry with size %d\n", getpid(), sizeof(LockEntry));  
-    return ((LockEntry *) allocSyncEntry(sizeof(LockEntry)));
+    //fprintf(stderr, "%d: alloc lock entry with size %d\n", getpid(), sizeof(LockEntry));
+      return ((LockEntry *) allocSyncEntry(sizeof(LockEntry), variable_counter++));
   }
 
   inline CondEntry *allocCondEntry(void) {
-    return ((CondEntry *) allocSyncEntry(sizeof(CondEntry)));
+      return ((CondEntry *) allocSyncEntry(sizeof(CondEntry), variable_counter++));
   }
 
   inline BarrierEntry *allocBarrierEntry(void) {
-    return ((BarrierEntry *) allocSyncEntry(sizeof(BarrierEntry)));
+      return ((BarrierEntry *) allocSyncEntry(sizeof(BarrierEntry), variable_counter++));
   }
 
   inline void lock(void) {

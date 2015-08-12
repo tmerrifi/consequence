@@ -21,6 +21,7 @@ class LockEntry :public SyncVarEntry {
     //waiting queue
     Entry * head;
     pthread_cond_t cond;
+    uint16_t owner;
 };
 
 
@@ -50,13 +51,13 @@ class BarrierEntry : public SyncVarEntry {
     volatile unsigned long committed;
 };
 
-  inline void * allocSyncEntry(int size) {
+inline void * allocSyncEntry(int size, int counter) {
       SyncVarEntry * syncEntry = (SyncVarEntry *)InternalHeap::getInstance().malloc(size);
       syncEntry->last_committed=0;
       void * statsMem=xmemory::malloc(sizeof(syncStats));
       syncEntry->stats = new (statsMem) syncStats();
 #ifdef PRINT_SCHEDULE
-      syncEntry->id=variable_counter++;
+      syncEntry->id=counter;
 #endif
     return syncEntry;
   }

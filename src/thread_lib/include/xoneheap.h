@@ -75,6 +75,10 @@ public:
         getHeap()->commit_parallel(expectedVersion);
     }
 
+    void checkpoint(){
+        getHeap()->checkpoint();
+    }
+    
     void partialUpdate(){
         getHeap()->partialUpdate();
     }
@@ -125,6 +129,10 @@ public:
         getHeap()->wake();
     }
 
+    void * get_segment_start(){
+        return getHeap()->get_segment_start();
+    }
+    
     int get_current_version(){
         return getHeap()->get_current_version();
     }
