@@ -66,7 +66,7 @@ private:
   static xglobals _globals;
 
   /// Protected heap.
-  static warpheap<xdefines::NUM_HEAPS, xdefines::PROTECTEDHEAP_CHUNK, xoneheap<xheap<xdefines::PROTECTEDHEAP_SIZE> > > _pheap;
+  static warpheap<xdefines::NUM_HEAPS, xdefines::PROTECTEDHEAP_CHUNK, xoneheap<xheap<PROTECTEDHEAP_SIZE> > > _pheap;
 
   /// A signal stack, for catching signals.
   static stack_t _sigstk;

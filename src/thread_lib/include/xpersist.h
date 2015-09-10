@@ -71,7 +71,7 @@
  * @class xpersist
  * @brief Makes a range of memory persistent and consistent.
  */
-template<class Type, int NElts = 1>
+template<class Type, unsigned long NElts = 1>
 class xpersist {
 public:
 
@@ -189,7 +189,7 @@ public:
   }
 
   /// @return the size in bytes of the underlying object.
-  inline int size(void) const {
+  inline unsigned long size(void) const {
     return NElts * sizeof(Type);
   }
   
