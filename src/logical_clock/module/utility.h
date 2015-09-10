@@ -47,7 +47,13 @@
     __inc_chunk_ticks(group_info, tid, val);
     
 #define __inc_clock_ticks_no_chunk_add(group_info, tid, val) \
-    group_info->clocks[tid].ticks+=val;      
+    group_info->clocks[tid].ticks+=val;
+
+#define __add_lazy_ticks(group_info, tid) \
+    if (current->task_clock.user_status->ticks_to_add){ \
+    __inc_clock_ticks(group_info, tid, current->task_clock.user_status->ticks_to_add); \
+    current->task_clock.user_status->ticks_to_add=0; \
+    }
 
 #define __set_clock_ticks(group_info, tid, val) (group_info->clocks[tid].ticks=val)
 

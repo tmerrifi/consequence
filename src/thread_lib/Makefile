@@ -34,7 +34,7 @@ endif
 
 CXX = g++
 
-CFLAGS32 = -g -march=core2 -mtune=core2 -msse3 $(LIB_ARCH) -DSSE_SUPPORT -O3 -shared -fPIC -DNDEBUG -D'CUSTOM_PREFIX(x)=grace\#\#x' $(CONSEQ_FLAGS) 
+CFLAGS32 = -g -march=core2 -mtune=core2 -msse3 $(LIB_ARCH) -DSSE_SUPPORT -O3 -shared -fPIC -D'CUSTOM_PREFIX(x)=grace\#\#x' $(CONSEQ_FLAGS) 
 
 LIBS = -ldl -lpthread -lDetermTaskClock -lksnap
 

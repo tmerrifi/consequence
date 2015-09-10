@@ -5,14 +5,14 @@
 #include <stdint.h>
 
 #ifndef THREADS
-#define THREADS 1
+#define THREADS 8
 #endif
 
 #define PAGE_SIZE (1<<12)
-#define PAGES 20
+#define PAGES 1000
 #define NUM_OF_PAGES (PAGES - (PAGES % THREADS))
 #define NUM_OF_BYTES (PAGE_SIZE * NUM_OF_PAGES)
-#define ITERATIONS 10 //150
+#define ITERATIONS 130
 
 uint8_t mem[NUM_OF_BYTES];
 int counter=0;
@@ -83,7 +83,7 @@ int main(int argc,char**argv)
         printf("after join\n");
         validate(counter);
 
-        if (counter==ITERATIONS*THREADS && failures==0){
+        if (counter==ITERATIONS*(THREADS+1) && failures==0){
             fprintf(stderr, "lockuse: SUCCEEDED\n");
         }
         else{

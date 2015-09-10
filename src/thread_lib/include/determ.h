@@ -63,7 +63,7 @@
 
 #define MAX_THREADS 2048
 #ifdef EVENT_VIEWER
-#define MAX_EVENTS 12000
+#define MAX_EVENTS 500000
 #else
 #define MAX_EVENTS 0
 #endif
@@ -78,7 +78,8 @@ enum debug_event_type{
     DEBUG_TYPE_COND_SIG=20, DEBUG_TYPE_COND_WAIT=21, DEBUG_TYPE_COND_WOKE_UP=22,
     DEBUG_TYPE_MUTEX_LOCK=23, DEBUG_TYPE_MUTEX_UNLOCK=24, DEBUG_TYPE_TOKEN_FAILED=25, DEBUG_TYPE_LOCK_SPIN_WAKE=26, DEBUG_TYPE_LOCK_CONDVAR_WAKE=27,
     DEBUG_TYPE_TX_COARSE_SUCCESS=28, DEBUG_TYPE_TX_COARSE_FAILED=29, DEBUG_TYPE_TX_ENDING=30, DEBUG_TYPE_TX_START=31, DEBUG_TYPE_MALLOC=32,
-    DEBUG_TYPE_STOP_CLOCK_NOC=33, DEBUG_TYPE_STOP_CLOCK=34, DEBUG_TYPE_START_CLOCK_NOC=35, DEBUG_TYPE_START_CLOCK=36, DEBUG_TYPE_START_COARSE=37, DEBUG_TYPE_END_COARSE=38
+    DEBUG_TYPE_STOP_CLOCK_NOC=33, DEBUG_TYPE_STOP_CLOCK=34, DEBUG_TYPE_START_CLOCK_NOC=35, DEBUG_TYPE_START_CLOCK=36, DEBUG_TYPE_START_COARSE=37, DEBUG_TYPE_END_COARSE=38,
+    DEBUG_TYPE_BEGIN_SPECULATION=39,DEBUG_TYPE_FAILED_SPECULATION=40,DEBUG_TYPE_END_SPECULATION=41,DEBUG_TYPE_SPECULATIVE_LOCK=42,DEBUG_TYPE_SPECULATIVE_UNLOCK=43
 };
 
 //this is an internal data structure we use to pass around statistics about a commit
@@ -116,6 +117,7 @@ private:
       uint64_t perf_counter_current;
       int cpu;
       uint64_t period_sets;
+      
   };
 
   class EventEntry {
@@ -1120,7 +1122,6 @@ public:
         if (onDeckThread!=NULL){
             WRAP(pthread_cond_signal)(&onDeckThread->cond_thread);
         }
-        //cout << "  Woke up " << waitingThread->threadindex << endl;
     }
     else{
         unlock();

@@ -67,6 +67,8 @@ private:
     static size_t _lock_count;
     static bool _token_holding;
 
+    static int reverts;
+    
     /******these variables keep track of some of the coarsening thread-local state*/
     static int tx_coarsening_counter;
     static int tx_current_coarsening_level;
@@ -94,10 +96,6 @@ private:
 
     static uint64_t _last_token_release_time;
 
-    static int progress;
-    static int testing;
-
-    
 public:
 
   /// @brief Initialize the system.
@@ -106,6 +104,7 @@ public:
     void* buf = mmap(NULL, sizeof(speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     _speculation = new (buf) speculation;
 
+    reverts=0;
     _initialized = false;
     _lock_count = 0;
     _token_holding = false;
@@ -115,11 +114,9 @@ public:
     tx_consecutively_coarsened=0;
     heapVersionToWaitFor=0;
     globalsVersionToWaitFor=0;
-    progress=0;
-    testing=0;
-    
     tx_current_coarsening_level=LOGICAL_CLOCK_MIN_ALLOWABLE_TX_SIZE;
     tx_monitor_next=false;
+    
     installSignalHandler();
 
     pid_t pid = syscall(SYS_getpid);
@@ -251,7 +248,14 @@ public:
 
 
     static int endSpeculation(void){
+#ifdef EVENT_VIEWER
+        if (_speculation->validate()){
+            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, NULL);
+            return true;
+        }
+#else
         return _speculation->validate();
+#endif
     }
     
   // New created thread should call this.
@@ -267,6 +271,7 @@ public:
     _thread_index = child_index;
     _lock_count = 0;
     _token_holding = false;
+    reverts=0;
 
     void* buf = mmap(NULL, sizeof(_speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     _speculation = new (_speculation) speculation;
@@ -296,20 +301,15 @@ public:
       cout << "thread deregister " << determ_task_get_id() << " count " << determ_task_clock_read() << " pid " << getpid() << endl;
 #endif
       waitToken();
-      //_speculation->validate();
-      cout << "DEREG: ending speculation " << getpid() << endl;
-      if (endSpeculation()){
-          _speculation->commitSpeculation(determ_task_clock_read());
-      }
+      commitAndUpdateMemoryTerminateSpeculation();
       
-      commitAndUpdateMemory();
       if (determ::getInstance().is_master_thread_finisehd()){
           ThreadPool::getInstance().set_exit_by_id(_thread_index);
       }
       else{
           ThreadPool::getInstance().add_thread_to_pool_by_id(_thread_index);
       }
-
+      cout << "reverts: " << reverts << endl;
       xmemory::sleep();
       //the token is released in here....
       determ::getInstance().deregisterThread(_thread_index);
@@ -342,11 +342,7 @@ public:
 
         //now, lets initialize the thread so that there is not a race with it to get the token
         waitToken();
-        cout << "SPAWN: ending speculation " << getpid() << endl;
-        if (endSpeculation()){
-            _speculation->commitSpeculation(determ_task_clock_read());
-        }
-
+        //cout << "SPAWN: ending speculation " << getpid() << endl;
         if (_lock_count>0){
             cout << "FORKING WHILE HOLDING A LOCK...not currently supported" << endl;
             exit(-1);
@@ -357,7 +353,7 @@ public:
         fflush(stdout);
 #endif
         //commit our memory so the spawned thread sees it
-        commitAndUpdateMemory();
+        commitAndUpdateMemoryTerminateSpeculation();
         //add the estimated time its going to take to fork a new process. 
         determ_task_clock_add_ticks(LOGICAL_CLOCK_TIME_FORK_PER_PAGE * xmemory::get_logical_pages());
         //get the thread pool entry. Need to do this while holding the token since we will wake up another thread
@@ -403,14 +399,8 @@ public:
     // synchronization after spawning, other thread should wait for 
     // the notification from me.
     waitToken();
-    //_speculation->validate();
-    cout << "JOIN: ending speculation " << getpid() << endl;
-    if (endSpeculation()){
-        _speculation->commitSpeculation(determ_task_clock_read());
-    }
-
-    commitAndUpdateMemory();
-
+    commitAndUpdateMemoryTerminateSpeculation();
+    
     // Get the joinee's thread index.
     child_threadindex = xthread::getThreadIndex(v);
 
@@ -452,13 +442,7 @@ public:
     int threadindex;
     stopClockNoCoarsen();
     waitToken();
-    //_speculation->validate();
-    cout << "CANCEL: ending speculation " << getpid() << endl;
-    if (endSpeculation()){
-        _speculation->commitSpeculation(determ_task_clock_read());
-    }
-
-    commitAndUpdateMemory();
+    commitAndUpdateMemoryTerminateSpeculation();
     threadindex = xthread::cancel(v);
     determ::getInstance().cancel(threadindex);
 #ifdef PRINT_SCHEDULE
@@ -472,6 +456,8 @@ public:
     /* Heap-related functions. */
   static inline void * malloc(size_t sz) {
       stopClock();
+      waitToken();
+      commitAndUpdateMemoryTerminateSpeculation();
       void * ptr = conseq_malloc::malloc(sz);
       startClock();
       return ptr;
@@ -481,6 +467,8 @@ public:
   }
   static inline void free(void * ptr) {
       stopClock();
+      waitToken();
+      commitAndUpdateMemoryTerminateSpeculation();
       conseq_malloc::free(ptr);
       startClock();
   }
@@ -488,7 +476,11 @@ public:
       return conseq_malloc::getSize(ptr);
   }
   static inline void * realloc(void * ptr, size_t sz) {
+      stopClock();
+      waitToken();
+      commitAndUpdateMemoryTerminateSpeculation();
       return conseq_malloc::realloc(ptr,sz);
+      startClock();
   }
 
 
@@ -662,60 +654,62 @@ public:
         
         bool isSingleActiveThread=false;
         int failure_count=0;
+        int stack_lock_count=++_lock_count;
+        bool isSpeculating=_speculation->isSpeculating();
 
-        //cout << "locking..... " << mutex << " ..." << _lock_count << endl;
-        _lock_count++;
-                
+        if (isSpeculating){
+            _speculation->updateTicks();
+        }
+
         //should we use the tx coarsening?
-        bool isUsingTxCoarsening= !_speculation->isSpeculating() && useTxCoarsening((size_t)mutex) && allow_coarsening;
-        //#ifdef DTHREADS_TASKCLOCK_DEBUG
-        //cout << "LOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read() << " pid " << getpid() << " lockcount " << _lock_count << endl;
-        //#endif
+        bool isUsingTxCoarsening= !isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
+#ifdef DTHREADS_TASKCLOCK_DEBUG
+        cout << "LOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read()
+             << " pid " << getpid() << " lockcount " << _lock_count << " m: " << mutex << endl;
+#endif
     retry:
+
         //if we are using kendo, we have to keep retrying and incrementing
         //if we aren't using kendo, this is just initialized to zero
         int ticks_to_add=0;
-        //cout << "here....." << getpid() << endl;
-        isSingleActiveThread= !_speculation->isSpeculating() && singleActiveThread();
-        //cout << "here 2....." << getpid() << endl;
+        isSingleActiveThread= !isSpeculating && singleActiveThread();
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
-        if (!isUsingTxCoarsening && !isSingleActiveThread &&
+        if (!isUsingTxCoarsening && !isSingleActiveThread && (failure_count==0) &&
             _speculation->shouldSpeculate(mutex, determ_task_clock_read()) &&
-            !(_speculation->isSpeculating()==false && _lock_count>0) ){
-
+            !(_speculation->isSpeculating()==false && _lock_count>1) ){
             //Here we begin or continue speculation...in the event that a speculation is reverted we will
             //return false and continue on
             if (_speculation->speculate(mutex,_last_token_release_time)==true){
+                if (!isSpeculating){
+                    determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
+                }
+                determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_LOCK, mutex);
                 return;
             }
             else{
-                //cout << "ROLLED BACK: " << getpid() << endl;
+                _lock_count=stack_lock_count;
+                //we just got back from a rolled back speculation
+                determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_FAILED_SPECULATION, (void *)id);
+                reverts++;
             }
        }
-                
+
+
+
+        
         //get the token, assuming its not just us and we don't already own it
         if ((!isSingleActiveThread && !_token_holding) || failure_count>0) {
             waitToken();
         }
 
-        //_speculation->validate();
-        //cout << "LOCK: ending speculation " << getpid() << endl;
         wasSpeculating=endSpeculation();
-        
-        //cout << "LOCK: ended speculation " << getpid() << endl;
-        
-        //cout << "LOCK: ended speculation " << determ_task_get_id() << " " << determ_task_clock_read() << " pid " << getpid() << " lockcount " << _lock_count << endl;
-        
-        //incrememnt the lock count again, since it gets reset when we end speculation
+
         
         //even if we are using coarsening, we may need to update before we hold on to the token and keep going
         //***this needs to happen AFTER we get the token
         //Keep in mind, we do this after we acquire the lock, because we don't want to perform multiple updates
         bool shouldUpdate=(_thread_index!=determ::getInstance().getLastTokenPutter());
-
-        //cout << "REAL LOCK " << mutex << " " << wasSpeculating << " " << _speculation->isSpeculating() << " " << getpid() << endl;
-        
         //lets actually get the "real" lock, which is really just setting a flag
         bool getLock=determ::getInstance().lock_acquire(mutex,_thread_index);
         //the lock was taken, we need to keep trying
@@ -729,6 +723,10 @@ public:
             //we may be a coarse tx
             if (failure_count==1){
                 commitAndUpdateMemory(&cs);
+            }
+            if (wasSpeculating){
+                //we need to actually commit our speculation
+                _speculation->commitSpeculation(determ_task_clock_read());
             }
             //reset the coarsening counter
             endTXCoarsening();
@@ -768,21 +766,17 @@ public:
         if (!isSingleActiveThread && !isUsingTxCoarsening){
             putToken();
         }
+
     }
 
     static void mutex_lock(pthread_mutex_t * mutex) {
 
         timespec t1,t2;
-
+        determ_task_clock_add_ticks_lazy(175);
+        stopClock();
         //**************DEBUG CODE**************
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
-        determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
         //*************END DEBUG CODE*********************
-
-        stopClock();
-        //*****DEBUG CODE************************/
-        determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
-        //******************************************/
 
 #ifdef USE_TAGGING
         xmemory::set_local_version_tag((unsigned int)mutex);
@@ -808,37 +802,39 @@ public:
 
 
   static void mutex_unlock(pthread_mutex_t * mutex) {
+      determ_task_clock_add_ticks_lazy(175);
+      stopClock((size_t)mutex);
       //**************DEBUG CODE**************
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       //**************************************
       //**************DEBUG CODE**************
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
       //*************END DEBUG CODE*********************
-      stopClock((size_t)mutex);
-      bool isSingleActiveThread=!_speculation->isSpeculating() && singleActiveThread();
-      bool isUsingTxCoarsening=!_speculation->isSpeculating() && useTxCoarsening(0);
-
-      //cout << "unlocking..... " << mutex << " " << _speculation->isSpeculating() << " " << getpid() << endl;
-
+      bool isSpeculating=_speculation->isSpeculating();
+      bool isSingleActiveThread=!isSpeculating && singleActiveThread();
+      bool isUsingTxCoarsening=!isSpeculating && useTxCoarsening(0);
+      
+      
+      assert(_lock_count>0);
       _lock_count--;
       
-      //cout << "starting unlock:1 " << _thread_index << " " << determ_task_clock_read() << " pid " << getpid() << " lockcount " << _lock_count << endl;
-      //#ifdef DTHREADS_TASKCLOCK_DEBUG
-      //cout << "starting unlock:2 " << _thread_index << " " << determ_task_clock_read() << " pid " << getpid() << " lockcount " << _lock_count << endl;
-      //#endif
+      if (isSpeculating){
+          _speculation->updateTicks();
+          //we want to notify the speculation engine that we have released this lock
+          _speculation->endSpeculativeEntry(mutex);
+                //*****DEBUG CODE************************/
+          determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
+          //******************************************/
+          determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_UNLOCK, mutex);
+          //**************DEBUG CODE**************
+          determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
+          //*************END DEBUG CODE*********************
+          return;
+      }
 
       //*****DEBUG CODE************************/
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
       //******************************************/
-
-      if (_speculation->isSpeculating()){
-
-          //we want to notify the speculation engine that we have released this lock
-          _speculation->endSpeculativeEntry(mutex);
-          
-          //cout << "unlock: continuing speculation " << _thread_index << " pid " << getpid() << " lockcount " << _lock_count << endl;
-          return;
-      }
       
       //if we're not the only one around, grab the token
       if (!isSingleActiveThread && !_token_holding){
@@ -846,8 +842,6 @@ public:
           waitToken();
       }
 
-      //_speculation->validate();
-      //cout << "UNLOCK: ending speculation " << getpid() << endl;        
       int wasSpeculating=endSpeculation();
 
       //if (determ::getInstance().lock_is_current_owner(mutex, _thread_index)){
@@ -874,8 +868,6 @@ public:
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
       //*************END DEBUG CODE*********************
 
-      //cout << "REAL UNLOCK " << mutex << endl;
-      
       // Unlock current lock.
       determ::getInstance().lock_release(mutex,_thread_index);
       //if we are using RR, add a large number to our clock
@@ -888,12 +880,12 @@ public:
 #endif
 
       if (wasSpeculating){
-          _speculation->commitSpeculation(determ_task_clock_read());
+          _speculation->commitSpeculation(determ_task_clock_read());          
       }
       else{
           _speculation->updateLastCommittedTime(mutex,determ_task_clock_read());
       }
-      
+
       if (!isSingleActiveThread && !isUsingTxCoarsening){
           //release the token
           putToken();
@@ -951,14 +943,7 @@ public:
       if (acquiringToken){
           waitToken();
       }
-
-      //_speculation->validate();
-      cout << "CONDWAIT: ending speculation " << getpid() << endl;        
-      if (endSpeculation()){
-          _speculation->commitSpeculation(determ_task_clock_read());
-      }
-
-      commitAndUpdateMemory();
+      commitAndUpdateMemoryTerminateSpeculation();
       
       //TODO: We need a better solution for this...this is embarassing :)
       if (sleep_count<MAX_SLEEP_COUNT){
@@ -1000,13 +985,7 @@ public:
       bool acquiringToken=(!_token_holding);
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       waitToken();
-      //_speculation->validate();
-      cout << "CONDBROADCAST: ending speculation " << getpid() << endl;
-      if (endSpeculation()){
-          _speculation->commitSpeculation(determ_task_clock_read());
-      }
-
-      commitAndUpdateMemory();
+      commitAndUpdateMemoryTerminateSpeculation();
       //**************DEBUG CODE**************
       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_COND_SIG, cond);
       //*************END DEBUG CODE*********************
@@ -1033,13 +1012,7 @@ public:
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       if (acquiringToken){
           waitToken();
-          //_speculation->validate();
-          cout << "CONDSIGNAL: ending speculation " << getpid() << endl;
-          if (endSpeculation()){
-              _speculation->commitSpeculation(determ_task_clock_read());
-          }
-
-          commitAndUpdateMemory();
+          commitAndUpdateMemoryTerminateSpeculation();
       }
       //**************DEBUG CODE**************
       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_COND_SIG, cond);
@@ -1062,6 +1035,14 @@ public:
 
     static void commitAndUpdateMemory(){
         commitAndUpdateMemory(NULL);
+    }
+
+    static void commitAndUpdateMemoryTerminateSpeculation(){
+        if (_speculation->validate()){
+            _speculation->commitSpeculation(determ_task_clock_read());
+            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, NULL);
+        }
+        commitAndUpdateMemory();
     }
 
     static void commitAndUpdateMemory(struct local_copy_stats * stats){

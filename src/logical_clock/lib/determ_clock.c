@@ -493,3 +493,7 @@ void determ_task_clock_close(){
 int determ_task_clock_hit_bounded_fence(){
     return task_clock_info.user_status->hit_bounded_fence;
 }
+
+void determ_task_clock_add_ticks_lazy(uint64_t ticks){
+    task_clock_info.user_status->ticks_to_add+=ticks;   
+}

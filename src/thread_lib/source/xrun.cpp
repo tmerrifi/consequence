@@ -15,7 +15,6 @@ bool xrun::tx_monitor_next;
 uint64_t xrun::heapVersionToWaitFor;
 uint64_t xrun::globalsVersionToWaitFor;
 uint64_t xrun::_last_token_release_time;
-int xrun::progress;
-int xrun::testing;
+int xrun::reverts;
 
 speculation * xrun::_speculation;

@@ -60,6 +60,7 @@
        uint32_t hwc_idx; 
        uint64_t period_sets;
        uint64_t hit_bounded_fence;
+       uint64_t ticks_to_add;
    } __attribute__ ((aligned (8), packed));
 
    struct determ_task_clock_info{
@@ -149,6 +150,7 @@
      uint64_t determ_task_clock_period_sets();
      int determ_task_clock_in_coarsened_tx();
      int determ_task_clock_hit_bounded_fence();
+     void determ_task_clock_add_ticks_lazy(uint64_t ticks);
 
 #endif
 

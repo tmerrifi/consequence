@@ -261,6 +261,8 @@ void task_clock_on_disable(struct task_clock_group_info * group_info){
         //clear the counter
         logical_clock_reset_current_ticks(group_info,__current_tid());
     }
+    __add_lazy_ticks(group_info, current->task_clock.tid);
+    
     group_info->notification_needed=1;
     spin_lock_irqsave(&group_info->lock, flags);
     lowest_tid=__determine_lowest_and_notify_or_wait(group_info, 10);
@@ -298,6 +300,8 @@ void task_clock_on_enable(struct task_clock_group_info * group_info){
     //reset the tick value now so we can figure out the length of a chunk later
     __reset_chunk_ticks(group_info, __current_tid());
 
+    __add_lazy_ticks(group_info, current->task_clock.tid);
+    
     //turn the counter back on...next overflow will actually be counted
     __tick_counter_turn_on(group_info);
 #if defined(DEBUG_TASK_CLOCK_COARSE_GRAINED)
