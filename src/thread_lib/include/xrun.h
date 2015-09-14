@@ -685,6 +685,12 @@ public:
                     determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
                 }
                 determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_LOCK, mutex);
+#ifdef TOKEN_ORDER_ROUND_ROBIN
+                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY);
+#else
+                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK);
+#endif
+
                 return;
             }
             else{
@@ -745,6 +751,7 @@ public:
 #endif
             determ_task_clock_add_ticks(ticks_to_add);
         }
+
         
 #ifdef TOKEN_ORDER_ROUND_ROBIN
         determ_task_clock_add_ticks(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY);
@@ -772,7 +779,6 @@ public:
     static void mutex_lock(pthread_mutex_t * mutex) {
 
         timespec t1,t2;
-        determ_task_clock_add_ticks_lazy(175);
         stopClock();
         //**************DEBUG CODE**************
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
@@ -802,7 +808,6 @@ public:
 
 
   static void mutex_unlock(pthread_mutex_t * mutex) {
-      determ_task_clock_add_ticks_lazy(175);
       stopClock((size_t)mutex);
       //**************DEBUG CODE**************
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
@@ -829,6 +834,11 @@ public:
           //**************DEBUG CODE**************
           determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
           //*************END DEBUG CODE*********************
+#ifdef TOKEN_ORDER_ROUND_ROBIN
+          determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY);
+#else
+          determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK);
+#endif
           return;
       }
 
