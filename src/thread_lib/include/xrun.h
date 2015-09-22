@@ -66,8 +66,11 @@ private:
     static size_t _thread_index;
     static size_t _lock_count;
     static bool _token_holding;
+    //the number of dirty pages used to increase a threads logical clock during speculation
+    static int spec_dirty_count;
 
     static int reverts;
+    static int locks_elided;
     
     /******these variables keep track of some of the coarsening thread-local state*/
     static int tx_coarsening_counter;
@@ -105,6 +108,8 @@ public:
     _speculation = new (buf) speculation;
 
     reverts=0;
+    spec_dirty_count=0;
+    locks_elided=0;
     _initialized = false;
     _lock_count = 0;
     _token_holding = false;
@@ -272,7 +277,8 @@ public:
     _lock_count = 0;
     _token_holding = false;
     reverts=0;
-
+    locks_elided=0;
+    
     void* buf = mmap(NULL, sizeof(_speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     _speculation = new (_speculation) speculation;
     
@@ -309,7 +315,7 @@ public:
       else{
           ThreadPool::getInstance().add_thread_to_pool_by_id(_thread_index);
       }
-      cout << "reverts: " << reverts << endl;
+      cout << "reverts: " << reverts << " locks_elided: " << locks_elided << endl;
       xmemory::sleep();
       //the token is released in here....
       determ::getInstance().deregisterThread(_thread_index);
@@ -672,25 +678,33 @@ public:
         //if we are using kendo, we have to keep retrying and incrementing
         //if we aren't using kendo, this is just initialized to zero
         int ticks_to_add=0;
+        int shouldSpecResult=0;
         isSingleActiveThread= !isSpeculating && singleActiveThread();
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
         if (!isUsingTxCoarsening && !isSingleActiveThread && (failure_count==0) &&
-            _speculation->shouldSpeculate(mutex, determ_task_clock_read()) &&
+            _speculation->shouldSpeculate(mutex, determ_task_clock_read(),&shouldSpecResult) &&
             !(_speculation->isSpeculating()==false && _lock_count>1) ){
             //Here we begin or continue speculation...in the event that a speculation is reverted we will
             //return false and continue on
             if (_speculation->speculate(mutex,_last_token_release_time)==true){
                 if (!isSpeculating){
+                    //beginning a speculation
+                    spec_dirty_count=0;
                     determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
                 }
                 determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_LOCK, mutex);
+                int dirty_pages_ticks=0;
+                //did we get some dirty pages? Don't do this on the first time through
+                if (isSpeculating && xmemory::get_dirty_pages() > spec_dirty_count){
+                    dirty_pages_ticks=(xmemory::get_dirty_pages() - spec_dirty_count)*LOGICAL_CLOCK_CONVERSION_COW_PF;
+                    spec_dirty_count=xmemory::get_dirty_pages();
+                }
 #ifdef TOKEN_ORDER_ROUND_ROBIN
-                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY);
+                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY+dirty_pages_ticks);
 #else
-                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK);
+                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK+dirty_pages_ticks);
 #endif
-
                 return;
             }
             else{
@@ -699,7 +713,10 @@ public:
                 determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_FAILED_SPECULATION, (void *)id);
                 reverts++;
             }
-       }
+        }
+        else{
+            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SHOULD_SPEC_FAILED+shouldSpecResult, (void *)id);
+        }
 
 
 
@@ -731,6 +748,7 @@ public:
                 commitAndUpdateMemory(&cs);
             }
             if (wasSpeculating){
+                locks_elided+=_speculation->getEntriesCount();
                 //we need to actually commit our speculation
                 _speculation->commitSpeculation(determ_task_clock_read());
             }
@@ -763,6 +781,7 @@ public:
         fflush(stdout);
 #endif
         if (wasSpeculating){
+            locks_elided+=_speculation->getEntriesCount();
             _speculation->commitSpeculation(determ_task_clock_read());
         }
         else{
@@ -780,7 +799,11 @@ public:
 
         timespec t1,t2;
         stopClock();
+
         //**************DEBUG CODE**************
+        if (_speculation->isSpeculating()){
+            determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
+        }
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
         //*************END DEBUG CODE*********************
 
@@ -810,6 +833,9 @@ public:
   static void mutex_unlock(pthread_mutex_t * mutex) {
       stopClock((size_t)mutex);
       //**************DEBUG CODE**************
+      if (_speculation->isSpeculating()){
+          determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
+      }
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       //**************************************
       //**************DEBUG CODE**************
@@ -834,10 +860,15 @@ public:
           //**************DEBUG CODE**************
           determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
           //*************END DEBUG CODE*********************
+          int dirty_pages_ticks=0;
+          if (xmemory::get_dirty_pages() > spec_dirty_count){
+              dirty_pages_ticks=(xmemory::get_dirty_pages() - spec_dirty_count)*LOGICAL_CLOCK_CONVERSION_COW_PF;
+              spec_dirty_count=xmemory::get_dirty_pages();
+          }
 #ifdef TOKEN_ORDER_ROUND_ROBIN
-          determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY);
+          determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY+dirty_pages_ticks);
 #else
-          determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK);
+          determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK+dirty_pages_ticks);
 #endif
           return;
       }
@@ -890,6 +921,7 @@ public:
 #endif
 
       if (wasSpeculating){
+          locks_elided+=_speculation->getEntriesCount();
           _speculation->commitSpeculation(determ_task_clock_read());          
       }
       else{
@@ -1049,6 +1081,7 @@ public:
 
     static void commitAndUpdateMemoryTerminateSpeculation(){
         if (_speculation->validate()){
+            locks_elided+=_speculation->getEntriesCount();
             _speculation->commitSpeculation(determ_task_clock_read());
             determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, NULL);
         }

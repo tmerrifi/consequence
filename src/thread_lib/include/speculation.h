@@ -10,16 +10,29 @@
 
 #define SPEC_USE_TICKS 1
 
-#define SPECULATION_ENTRIES_MAX 15
 
 #ifdef TOKEN_ORDER_ROUND_ROBIN
 //basically just infinity...relying on SPECULATION_ENTRIES_MAX
+#define SPECULATION_ENTRIES_MAX 15
 #define SPECULATION_MAX_TICKS 500000000
 #else
-#define SPECULATION_MAX_TICKS 100000
+#define SPECULATION_ENTRIES_MAX 15
+#define SPECULATION_MAX_TICKS 30000
 #endif 
 
-#define SPECULATION_ENTRIES_MAX_ALLOCATED (SPECULATION_ENTRIES_MAX+100)
+#define SPECULATION_ENTRIES_MAX_ALLOCATED (SPECULATION_ENTRIES_MAX+50)
+
+#define SUCCEEDED_TICK_INC 2000
+#define SUCCEEDED_TICK_DEC 4000
+
+#define SPEC_STATE_FAILED_THREE 1
+#define SPEC_STATE_FAILED_TWO 2
+#define SPEC_STATE_FAILED_ONE 3
+#define SPEC_STATE_SUCCESS_ONE 4
+#define SPEC_STATE_SUCCESS_TWO 5
+#define SPEC_STATE_SUCCESS_THREE 6
+
+#define SPEC_TRY_AFTER_FAILED 20
 
 class speculation{
     
@@ -35,12 +48,17 @@ class speculation{
     uint32_t active_speculative_entries;
     uint64_t logical_clock_start;
     checkpoint _checkpoint;
+    uint32_t max_entries;
+    uint64_t max_ticks;
     uint64_t ticks;
+    uint64_t seq_num;
+    uint8_t state;
     
      bool verify_synchronization(){
         for (int i=0;i<entries_count;i++){
             SyncVarEntry * entry = entries[i].entry;
             if (entry->last_committed > logical_clock_start){
+                //cout << "failed " << getpid() << " " << entry << endl;
                 return false;
             }
         }
@@ -55,6 +73,11 @@ class speculation{
         entries_count=0;
         active_speculative_entries=0;
         logical_clock_start=0;
+        max_entries=SPECULATION_ENTRIES_MAX;
+        max_ticks=SPECULATION_MAX_TICKS;
+        state=SPEC_STATE_SUCCESS_ONE;
+        seq_num=0;
+        cout << "state: " << (unsigned)state << endl;
     }
 
 
@@ -66,40 +89,81 @@ class speculation{
 #endif
     }
 
-    bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock){
-        
+    void adaptSpeculation(bool succeeded){
+#ifdef SPEC_USE_TICKS
+        if (succeeded){
+            if (this->ticks >= max_ticks){
+                max_ticks+=SUCCEEDED_TICK_INC;
+            }
+            if (this->state!=SPEC_STATE_SUCCESS_THREE){
+                this->state++;
+            }
+        }
+        else{
+            if (this->state!=SPEC_STATE_FAILED_THREE){
+                this->state--;
+            }
+            max_ticks=(max_ticks<SUCCEEDED_TICK_DEC) ? 0 : max_ticks-SUCCEEDED_TICK_DEC;
+            //cout << "adapt: BAD  max_ticks " << max_ticks << " " << getpid() << " " << ticks << " " << entries_count << endl;
+        }
+#endif
+    }
+
+    bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
+#ifdef USE_SPECULATION
+        if (state==SPEC_STATE_FAILED_THREE){
+            //cout << "failed three...." << endl;
+            *result=1;
+            return false;
+        }
         if (active_speculative_entries > 0){
             if (getSyncEntry(entry_ptr)==NULL){
                 cout << "nested speculation with uninitialized sync object...not currently supported" << endl;
                 exit(-1);
             }
+            *result=2;
             //we have to keep going here...otherwise if we stop speculating we'll need to actually acquire the lock
             return true;
         }
         else if (getSyncEntry(entry_ptr)==NULL){
+            *result=3;
             return false;
         }
 #ifdef SPEC_USE_TICKS
-        else if (entries_count > SPECULATION_ENTRIES_MAX){
+        else if (entries_count >= max_entries){
+            *result=4;
             return false;
         }
-        else if (ticks < SPECULATION_MAX_TICKS){
+        else if (ticks < max_ticks){
+            *result=5;
             return true;
         }
 #else
-        else if (entries_count < SPECULATION_ENTRIES_MAX){
+        else if (entries_count < max_entries){
+            *result=6;
             return true;
         }
 #endif
         else{
+            *result=7;
             return false;
         }
+#else
+        //if speculation is disabled
+        *result=8;
+        return false;
+#endif
     }
     
     //called by code that is not adding a new sync var to the current
     //set of entries
      bool shouldSpeculate(uint64_t logical_clock){
+#ifdef USE_SPECULATION
         return true;
+#else
+        //if speculation is disabled
+        return false;
+#endif
     }
     
      bool speculate(void * entry_ptr, uint64_t logical_clock){
@@ -136,11 +200,13 @@ class speculation{
             return 0;
         }
         else if (!verify_synchronization()){
+            adaptSpeculation(false);
             entries_count=0;
             ticks=0;
             //do what we need to do
             _checkpoint.checkpoint_revert();
         }
+        adaptSpeculation(true);
         return 1;
     }
 
@@ -150,6 +216,7 @@ class speculation{
      }
      
      void commitSpeculation(uint64_t logical_clock){
+         char str[500];
          for (int i=0;i<entries_count;i++){
              SyncVarEntry * entry = entries[i].entry;
              entry->last_committed=logical_clock;
@@ -157,11 +224,18 @@ class speculation{
          entries_count=0;
          _checkpoint.is_speculating=false;
          ticks=0;
+         seq_num++;
      }
 
      void updateLastCommittedTime(void * entry_ptr, uint64_t logical_clock){
         SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
         entry->last_committed=logical_clock;
+        seq_num++;
+        if (this->state==SPEC_STATE_FAILED_THREE &&
+            (seq_num % SPEC_TRY_AFTER_FAILED) == 0){
+            //cout << "trying again... " << endl;
+            this->state++;
+        }
      }
 
      int getEntriesCount(){

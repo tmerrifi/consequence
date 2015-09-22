@@ -16,5 +16,7 @@ uint64_t xrun::heapVersionToWaitFor;
 uint64_t xrun::globalsVersionToWaitFor;
 uint64_t xrun::_last_token_release_time;
 int xrun::reverts;
+int xrun::locks_elided;
+int xrun::spec_dirty_count;
 
 speculation * xrun::_speculation;
