@@ -8,22 +8,35 @@
 
 #include <determ_clock.h>
 
-#define SPEC_USE_TICKS 1
-
-
 #ifdef TOKEN_ORDER_ROUND_ROBIN
 //basically just infinity...relying on SPECULATION_ENTRIES_MAX
 #define SPECULATION_ENTRIES_MAX 15
 #define SPECULATION_MAX_TICKS 500000000
 #else
-#define SPECULATION_ENTRIES_MAX 15
+
+#ifndef SPECULATION_ENTRIES_MAX
+#define SPECULATION_ENTRIES_MAX 100
+#endif
+
+#ifndef SPECULATION_MAX_TICKS
 #define SPECULATION_MAX_TICKS 30000
+#endif
+
 #endif 
 
 #define SPECULATION_ENTRIES_MAX_ALLOCATED (SPECULATION_ENTRIES_MAX+50)
 
-#define SUCCEEDED_TICK_INC 2000
-#define SUCCEEDED_TICK_DEC 4000
+#ifdef USE_CYCLES_TICKS
+
+#define SUCCEEDED_TICK_INC 1000
+#define SUCCEEDED_TICK_DEC 10000
+
+#else
+
+#define SUCCEEDED_TICK_INC 500
+#define SUCCEEDED_TICK_DEC 2000
+
+#endif
 
 #define SPEC_STATE_FAILED_THREE 1
 #define SPEC_STATE_FAILED_TWO 2
@@ -32,7 +45,31 @@
 #define SPEC_STATE_SUCCESS_TWO 5
 #define SPEC_STATE_SUCCESS_THREE 6
 
-#define SPEC_TRY_AFTER_FAILED 20
+#define SPEC_TRY_AFTER_FAILED 100
+
+#ifdef SPEC_DISABLE_ADAPTATION
+
+//how many tx should we spend "learning"
+#define SPEC_LEARNING_PHASE_TX 0
+//how often should we kick off a learning phase?
+#define SPEC_LEARNING_PHASE_FREQ 1000000000
+//how often should we adapt when in a learning phase?
+#define SPEC_ADAPTIVE_FREQ_LEARNING 1000000000
+//how much adaptation should we do in outside of the learning phase?
+#define SPEC_ADAPTIVE_FREQ_NONLEARNING 1000000000
+
+#else
+
+//how many tx should we spend "learning"
+#define SPEC_LEARNING_PHASE_TX 500 
+//how often should we kick off a learning phase?
+#define SPEC_LEARNING_PHASE_FREQ 10000
+//how often should we adapt when in a learning phase?
+#define SPEC_ADAPTIVE_FREQ_LEARNING 1
+//how much adaptation should we do in outside of the learning phase?
+#define SPEC_ADAPTIVE_FREQ_NONLEARNING 50
+
+#endif
 
 class speculation{
     
@@ -53,6 +90,8 @@ class speculation{
     uint64_t ticks;
     uint64_t seq_num;
     uint8_t state;
+    bool learning_phase;
+    uint32_t learning_phase_count;
     
      bool verify_synchronization(){
         for (int i=0;i<entries_count;i++){
@@ -77,7 +116,13 @@ class speculation{
         max_ticks=SPECULATION_MAX_TICKS;
         state=SPEC_STATE_SUCCESS_ONE;
         seq_num=0;
-        cout << "state: " << (unsigned)state << endl;
+#ifdef SPEC_DISABLE_ADAPTATION
+        learning_phase=false;  
+#else
+        learning_phase=true;
+#endif
+        
+        learning_phase_count=0;
     }
 
 
@@ -90,21 +135,30 @@ class speculation{
     }
 
     void adaptSpeculation(bool succeeded){
+        //first, should we adapt at all?
 #ifdef SPEC_USE_TICKS
-        if (succeeded){
-            if (this->ticks >= max_ticks){
-                max_ticks+=SUCCEEDED_TICK_INC;
+        if ( (!learning_phase && (seq_num % SPEC_ADAPTIVE_FREQ_NONLEARNING) == 0) ||
+             (learning_phase && (seq_num % SPEC_ADAPTIVE_FREQ_LEARNING) == 0) ){
+            //is the learning phase over????
+            if (learning_phase && ++learning_phase_count >= SPEC_LEARNING_PHASE_TX){
+                learning_phase=false;
+                learning_phase_count=0;
             }
-            if (this->state!=SPEC_STATE_SUCCESS_THREE){
-                this->state++;
+            
+            if (succeeded){
+                if (this->ticks >= max_ticks){
+                    max_ticks+=SUCCEEDED_TICK_INC;
+                }
+                if (this->state!=SPEC_STATE_SUCCESS_THREE){
+                    this->state++;
+                }
             }
-        }
-        else{
-            if (this->state!=SPEC_STATE_FAILED_THREE){
-                this->state--;
+            else{
+                if (this->state!=SPEC_STATE_FAILED_THREE){
+                    this->state--;
+                }
+                max_ticks=(max_ticks<SUCCEEDED_TICK_DEC) ? 0 : max_ticks-SUCCEEDED_TICK_DEC;
             }
-            max_ticks=(max_ticks<SUCCEEDED_TICK_DEC) ? 0 : max_ticks-SUCCEEDED_TICK_DEC;
-            //cout << "adapt: BAD  max_ticks " << max_ticks << " " << getpid() << " " << ticks << " " << entries_count << endl;
         }
 #endif
     }
@@ -112,7 +166,6 @@ class speculation{
     bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
 #ifdef USE_SPECULATION
         if (state==SPEC_STATE_FAILED_THREE){
-            //cout << "failed three...." << endl;
             *result=1;
             return false;
         }
@@ -144,6 +197,15 @@ class speculation{
             return true;
         }
 #endif
+        else if (ticks >= max_ticks){
+            if (isSpeculating()){
+                *result=11;
+            }
+            else{
+                *result=12;
+            }
+            return false; 
+        }
         else{
             *result=7;
             return false;
@@ -221,19 +283,24 @@ class speculation{
              SyncVarEntry * entry = entries[i].entry;
              entry->last_committed=logical_clock;
          }
+         //cout << "commit " << ticks << " " << entries_count << " " << getpid() << endl;
          entries_count=0;
          _checkpoint.is_speculating=false;
          ticks=0;
          seq_num++;
+         if (!learning_phase && (seq_num % SPEC_LEARNING_PHASE_FREQ) == 0){
+             learning_phase=true;
+         }
      }
 
      void updateLastCommittedTime(void * entry_ptr, uint64_t logical_clock){
         SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
         entry->last_committed=logical_clock;
         seq_num++;
+        //maybe we should try speculation again?
         if (this->state==SPEC_STATE_FAILED_THREE &&
             (seq_num % SPEC_TRY_AFTER_FAILED) == 0){
-            //cout << "trying again... " << endl;
+            //by incrementing the state, we'll try speculation once more
             this->state++;
         }
      }
