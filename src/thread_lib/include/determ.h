@@ -79,7 +79,8 @@ enum debug_event_type{
     DEBUG_TYPE_MUTEX_LOCK=23, DEBUG_TYPE_MUTEX_UNLOCK=24, DEBUG_TYPE_TOKEN_FAILED=25, DEBUG_TYPE_LOCK_SPIN_WAKE=26, DEBUG_TYPE_LOCK_CONDVAR_WAKE=27,
     DEBUG_TYPE_TX_COARSE_SUCCESS=28, DEBUG_TYPE_TX_COARSE_FAILED=29, DEBUG_TYPE_TX_ENDING=30, DEBUG_TYPE_TX_START=31, DEBUG_TYPE_MALLOC=32,
     DEBUG_TYPE_STOP_CLOCK_NOC=33, DEBUG_TYPE_STOP_CLOCK=34, DEBUG_TYPE_START_CLOCK_NOC=35, DEBUG_TYPE_START_CLOCK=36, DEBUG_TYPE_START_COARSE=37, DEBUG_TYPE_END_COARSE=38,
-    DEBUG_TYPE_BEGIN_SPECULATION=39,DEBUG_TYPE_FAILED_SPECULATION=40,DEBUG_TYPE_END_SPECULATION=41,DEBUG_TYPE_SPECULATIVE_LOCK=42,DEBUG_TYPE_SPECULATIVE_UNLOCK=43
+    DEBUG_TYPE_BEGIN_SPECULATION=39,DEBUG_TYPE_FAILED_SPECULATION=40,DEBUG_TYPE_END_SPECULATION=41,DEBUG_TYPE_SPECULATIVE_LOCK=42,DEBUG_TYPE_SPECULATIVE_UNLOCK=43,
+    DEBUG_TYPE_SPECULATIVE_COMMIT=44,DEBUG_TYPE_SPECULATIVE_NOSPEC=45
 };
 
 //this is an internal data structure we use to pass around statistics about a commit
@@ -170,7 +171,7 @@ private:
       
       void add_event_commit_stats(int updated_pages, int merged_pages, int partial_updated_pages, int dirty_pages){
 #ifdef EVENT_VIEWER
-          if (this->event_counter < MAX_EVENTS && this->events[this->event_counter].event_type==DEBUG_TYPE_COMMIT){
+          if (this->event_counter < MAX_EVENTS){
               this->events[this->event_counter].updated_pages=updated_pages;
               this->events[this->event_counter].partial_pages=partial_updated_pages;
               this->events[this->event_counter].dirty_pages=dirty_pages;
