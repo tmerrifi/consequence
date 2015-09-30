@@ -733,25 +733,36 @@ public:
                 reverts++;
             }
         }
-        else{
-            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SHOULD_SPEC_FAILED+shouldSpecResult, (void *)id);
-        }
 
-
-
+        determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_NOSPEC, (void *)shouldSpecResult);
         
         //get the token, assuming its not just us and we don't already own it
         if ((!isSingleActiveThread && !_token_holding) || failure_count>0) {
             waitToken();
         }
 
-        wasSpeculating=endSpeculation();
-
-        
         //even if we are using coarsening, we may need to update before we hold on to the token and keep going
         //***this needs to happen AFTER we get the token
         //Keep in mind, we do this after we acquire the lock, because we don't want to perform multiple updates
         bool shouldUpdate=(_thread_index!=determ::getInstance().getLastTokenPutter());
+
+        //wasSpeculating=endSpeculation();
+        //in the event that we were speculating lets do an update, release the token and try to speculate again
+        if (wasSpeculating=endSpeculation()){
+            if (shouldUpdate){
+                commitAndUpdateMemory();
+            }
+            int locks_elided_tmp=_speculation->getEntriesCount();
+            locks_elided+=locks_elided_tmp;
+            //DEBUG_TYPE_SPECULATIVE_COMMIT
+            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_COMMIT, (void *)locks_elided_tmp);  
+            _speculation->commitSpeculation(determ_task_clock_read());
+            putToken();
+            isSpeculating=false;
+            goto retry;
+        }
+
+        
         //lets actually get the "real" lock, which is really just setting a flag
         bool getLock=determ::getInstance().lock_acquire(mutex,_thread_index);
         //the lock was taken, we need to keep trying
