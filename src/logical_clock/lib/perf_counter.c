@@ -37,12 +37,19 @@ void perf_counter_init(u_int32_t sample_period, int32_t group_fd, struct perf_co
   memset(&pe, 0, sizeof(struct perf_event_attr));
   pe.type = PERF_TYPE_RAW;
   pe.size = sizeof(struct perf_event_attr);
+#ifdef LOGICAL_CLOCK_CYCLES
+  pe.config = (0x003CULL) | (0x0000ULL);
+#else
+  pe.config = (0x0C0ULL) | (0x0000ULL);
+#endif
+  
   //INSTRUCTIONS RETIRED
-  //pe.config = (0x0C0ULL) | (0x0000ULL);
   //Retired conditional branches
   //pe.config = (0x00C4ULL) | (0x0100ULL);
   //Unhalted reference cycles
-  pe.config = (0x003CULL) | (0x0100ULL);
+  //pe.config = (0x003CULL) | (0x0100ULL);
+  //unhalted cycles
+
   
   pe.disabled = 1;
   pe.exclude_kernel = 1;
