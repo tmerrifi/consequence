@@ -151,7 +151,7 @@
      int determ_task_clock_in_coarsened_tx();
      int determ_task_clock_hit_bounded_fence();
      void determ_task_clock_add_ticks_lazy(uint64_t ticks);
-
+     unsigned long long determ_task_clock_read_cycle_counter();
 #endif
 
 #ifdef __cplusplus

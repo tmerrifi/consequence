@@ -497,3 +497,15 @@ int determ_task_clock_hit_bounded_fence(){
 void determ_task_clock_add_ticks_lazy(uint64_t ticks){
     task_clock_info.user_status->ticks_to_add+=ticks;   
 }
+
+unsigned long long determ_task_clock_read_cycle_counter(){
+#if defined(__i386__)
+    unsigned long long int x;
+    __asm__ volatile (".byte 0x0f, 0x31" : "=A" (x));
+    return x;
+#elif defined(__x86_64__)
+    unsigned hi, lo;
+    __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
+    return ( (unsigned long long)lo)|( ((unsigned long long)hi)<<32 );
+#endif
+}

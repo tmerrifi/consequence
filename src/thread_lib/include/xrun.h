@@ -68,7 +68,9 @@ private:
     static bool _token_holding;
     //the number of dirty pages used to increase a threads logical clock during speculation
     static int spec_dirty_count;
-
+    static unsigned long long last_cycle_read;
+    static unsigned long long wait_cycles;
+    
     static int reverts;
     static int locks_elided;
     
@@ -564,7 +566,13 @@ public:
       struct timespec t1,t2;
       int spin_counter=0;
       if (!_token_holding){
+#ifdef TRACK_LIBRARY_CYCLES
+          unsigned long long start_cycles = determ_task_clock_read_cycle_counter();
+#endif
           spin_counter=determ::getInstance().getToken(_thread_index);
+#ifdef TRACK_LIBRARY_CYCLES
+          wait_cycles = determ_task_clock_read_cycle_counter() - start_cycles;
+#endif
           //fast forward our clock
           determ_task_clock_add_ticks(fast_forward_clock());
           _token_holding=true;
@@ -598,6 +606,9 @@ public:
         else{
             determ_task_clock_stop_with_id(id);
         }
+#ifdef TRACK_LIBRARY_CYCLES
+        last_cycle_read=determ_task_clock_read_cycle_counter();
+#endif
     }
 
     static void stopClock(void){
@@ -605,6 +616,14 @@ public:
     }
 
     static void startClock(void){
+#ifdef TRACK_LIBRARY_CYCLES
+        unsigned long long lib_cycles=determ_task_clock_read_cycle_counter() - last_cycle_read;
+        //sanity check
+        if (lib_cycles < 10000000ULL && wait_cycles < 10000000ULL ){
+            determ_task_clock_add_ticks_lazy(lib_cycles - wait_cycles);
+        }
+        lib_cycles = wait_cycles = 0;
+#endif
         if (inCoarsenedTx()){
             determ_task_clock_start_no_notify();
         }

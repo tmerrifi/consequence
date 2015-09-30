@@ -18,5 +18,8 @@ uint64_t xrun::_last_token_release_time;
 int xrun::reverts;
 int xrun::locks_elided;
 int xrun::spec_dirty_count;
+unsigned long long xrun::last_cycle_read;
+unsigned long long xrun::wait_cycles;
+
 
 speculation * xrun::_speculation;
