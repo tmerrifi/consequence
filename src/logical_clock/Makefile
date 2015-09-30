@@ -3,6 +3,12 @@ ifeq ($(CONSEQ_TYPE),RR)
 	FLAGS = -DNO_INSTRUCTION_COUNTING
 endif
 
+ifeq ($(CONSEQ_TYPE),ICSpecCycles)
+	FLAGS = -DLOGICAL_CLOCK_CYCLES
+endif
+
+
+
 SHELL = /bin/bash
 CFLAGS = -g -std=gnu99 -fPIC -L/usr/lib $(LIB_ARCH) -DDEBUG_CLOCK_CACHE_OFF -DDETERM_CLOCK_SAMPLE_PERIOD=5000 $(FLAGS)
 SOURCES = ./lib/perf_counter.o ./lib/determ_clock.o
