@@ -256,9 +256,11 @@ public:
 
     static int endSpeculation(void){
 #ifdef EVENT_VIEWER
+        determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK, NULL);
         if (_speculation->validate()){
+            determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
             determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, NULL);
-            return true;
+            return 1;
         }
 #else
         return _speculation->validate();
@@ -339,6 +341,14 @@ public:
                 && ( (size_t)addr > (size_t)end_of_stack && ((size_t)addr-(size_t)end_of_stack) < xdefines::STACK_SIZE ));
     }
 
+    static inline uint64_t get_ticks_for_speculation(){
+#ifdef NO_DETERM_SYNC
+        return determ::getInstance().getTokenCounter();
+#else
+        return determ_task_clock_read();
+#endif // NO_DETERM_SYNC
+    }
+    
   /// @brief Spawn a thread.
     static void * spawn(threadFunction * fn, void * arg, pthread_t * tid) {
         //we use this to designate the "end" of the user's stack. This i
@@ -682,9 +692,9 @@ public:
         int stack_lock_count=++_lock_count;
         bool isSpeculating=_speculation->isSpeculating();
 
-        if (isSpeculating){
+        /*if (isSpeculating){
             _speculation->updateTicks();
-        }
+            }*/
 
         //should we use the tx coarsening?
         bool isUsingTxCoarsening= !isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
@@ -702,17 +712,23 @@ public:
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
         if (!isUsingTxCoarsening && !isSingleActiveThread && (failure_count==0) &&
-            _speculation->shouldSpeculate(mutex, determ_task_clock_read(),&shouldSpecResult) &&
+            _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult) &&
             !(_speculation->isSpeculating()==false && _lock_count>1) ){
             //Here we begin or continue speculation...in the event that a speculation is reverted we will
             //return false and continue on
+#ifdef NO_DETERM_SYNC
+            if (_speculation->speculate(mutex,get_ticks_for_speculation())==true){
+#else
             if (_speculation->speculate(mutex,_last_token_release_time)==true){
+#endif
                 if (!isSpeculating){
                     //beginning a speculation
                     spec_dirty_count=0;
                     determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
                 }
                 determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_LOCK, mutex);
+                determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_CURRENT_TICKS, (void *)_speculation->getCurrentTicks());
+                determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_MAX_TICKS, (void *)_speculation->getMaxTicks() );
                 int dirty_pages_ticks=0;
                 //did we get some dirty pages? Don't do this on the first time through
                 if (isSpeculating && xmemory::get_dirty_pages() > spec_dirty_count){
@@ -727,13 +743,22 @@ public:
                 return;
             }
             else{
+                determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
                 _lock_count=stack_lock_count;
                 //we just got back from a rolled back speculation
                 determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_FAILED_SPECULATION, (void *)id);
                 reverts++;
             }
         }
+#ifdef EVENT_VIEWER
+            else if (isSpeculating){
+                _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult);
+                determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_CURRENT_TICKS, (void *)_speculation->getCurrentTicks());
+                determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_SHOULDSPEC, (void *)shouldSpecResult);
+            }                
+#endif // EVENT_VIEWER
 
+                
         determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_NOSPEC, (void *)shouldSpecResult);
         
         //get the token, assuming its not just us and we don't already own it
@@ -756,7 +781,7 @@ public:
             locks_elided+=locks_elided_tmp;
             //DEBUG_TYPE_SPECULATIVE_COMMIT
             determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_COMMIT, (void *)locks_elided_tmp);  
-            _speculation->commitSpeculation(determ_task_clock_read());
+            _speculation->commitSpeculation(get_ticks_for_speculation());
             putToken();
             isSpeculating=false;
             goto retry;
@@ -780,7 +805,7 @@ public:
             if (wasSpeculating){
                 locks_elided+=_speculation->getEntriesCount();
                 //we need to actually commit our speculation
-                _speculation->commitSpeculation(determ_task_clock_read());
+                _speculation->commitSpeculation(get_ticks_for_speculation());
             }
             //reset the coarsening counter
             endTXCoarsening();
@@ -812,10 +837,10 @@ public:
 #endif
         if (wasSpeculating){
             locks_elided+=_speculation->getEntriesCount();
-            _speculation->commitSpeculation(determ_task_clock_read());
+            _speculation->commitSpeculation(get_ticks_for_speculation());
         }
         else{
-            _speculation->updateLastCommittedTime(mutex,determ_task_clock_read());
+            _speculation->updateLastCommittedTime(mutex,get_ticks_for_speculation());
         }
 
         //release the token if need be
@@ -880,7 +905,7 @@ public:
       _lock_count--;
       
       if (isSpeculating){
-          _speculation->updateTicks();
+          //_speculation->updateTicks();
           //we want to notify the speculation engine that we have released this lock
           _speculation->endSpeculativeEntry(mutex);
                 //*****DEBUG CODE************************/
@@ -952,10 +977,10 @@ public:
 
       if (wasSpeculating){
           locks_elided+=_speculation->getEntriesCount();
-          _speculation->commitSpeculation(determ_task_clock_read());          
+          _speculation->commitSpeculation(get_ticks_for_speculation());          
       }
       else{
-          _speculation->updateLastCommittedTime(mutex,determ_task_clock_read());
+          _speculation->updateLastCommittedTime(mutex,get_ticks_for_speculation());
       }
 
       if (!isSingleActiveThread && !isUsingTxCoarsening){
@@ -1110,9 +1135,11 @@ public:
     }
 
     static void commitAndUpdateMemoryTerminateSpeculation(){
+        determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK, NULL);
         if (_speculation->validate()){
+            determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
             locks_elided+=_speculation->getEntriesCount();
-            _speculation->commitSpeculation(determ_task_clock_read());
+            _speculation->commitSpeculation(get_ticks_for_speculation());
             determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, NULL);
         }
         commitAndUpdateMemory();

@@ -80,7 +80,8 @@ enum debug_event_type{
     DEBUG_TYPE_TX_COARSE_SUCCESS=28, DEBUG_TYPE_TX_COARSE_FAILED=29, DEBUG_TYPE_TX_ENDING=30, DEBUG_TYPE_TX_START=31, DEBUG_TYPE_MALLOC=32,
     DEBUG_TYPE_STOP_CLOCK_NOC=33, DEBUG_TYPE_STOP_CLOCK=34, DEBUG_TYPE_START_CLOCK_NOC=35, DEBUG_TYPE_START_CLOCK=36, DEBUG_TYPE_START_COARSE=37, DEBUG_TYPE_END_COARSE=38,
     DEBUG_TYPE_BEGIN_SPECULATION=39,DEBUG_TYPE_FAILED_SPECULATION=40,DEBUG_TYPE_END_SPECULATION=41,DEBUG_TYPE_SPECULATIVE_LOCK=42,DEBUG_TYPE_SPECULATIVE_UNLOCK=43,
-    DEBUG_TYPE_SPECULATIVE_COMMIT=44,DEBUG_TYPE_SPECULATIVE_NOSPEC=45
+    DEBUG_TYPE_SPECULATIVE_COMMIT=44,DEBUG_TYPE_SPECULATIVE_NOSPEC=45,DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK=46,DEBUG_TYPE_SPECULATIVE_CURRENT_TICKS=47,
+    DEBUG_TYPE_SPECULATIVE_MAX_TICKS=48, DEBUG_TYPE_SPECULATIVE_SHOULDSPEC=49
 };
 
 //this is an internal data structure we use to pass around statistics about a commit
@@ -365,6 +366,8 @@ private:
     serialized by Conversion*/
   volatile uint64_t last_committed_globals_version;
   volatile uint64_t last_committed_heap_version;
+
+  volatile uint64_t token_acq_count;
   
  determ():
   _condnum(0),
@@ -381,7 +384,8 @@ private:
       _parentnotified(false), 
       _childregistered(false),
       master_thread_finished(false),
-      variable_counter(0)
+      variable_counter(0),
+      token_acq_count(0)
           {  }
   
 public:
@@ -681,7 +685,7 @@ public:
 
     end_thread_event(threadindex, DEBUG_TYPE_WAIT_LOWEST);
     
-    xmemory::partialUpdate();
+    //xmemory::partialUpdate();
     
   getToken:
     int counter=0;
@@ -696,8 +700,8 @@ public:
     if (!__sync_bool_compare_and_swap ((size_t *)(&_tokenpos), NULL, (size_t)entry )) {
         goto getToken;
     }
-
-
+    
+    token_acq_count++;
 #else
   startover:
     int spin_counter=0;
@@ -825,6 +829,14 @@ public:
 
   u_int64_t getLastTokenClock(){
       return _last_token_value;
+  }
+
+  uint64_t getTokenCounter(){
+#ifdef NO_DETERM_SYNC
+      return token_acq_count;
+#else
+      return 0;
+#endif
   }
 
   // No need lock since the register is done before any spawning.

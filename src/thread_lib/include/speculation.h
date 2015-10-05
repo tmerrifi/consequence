@@ -88,6 +88,7 @@ class speculation{
     uint32_t max_entries;
     uint64_t max_ticks;
     uint64_t ticks;
+    uint64_t start_ticks;
     uint64_t seq_num;
     uint8_t state;
     bool learning_phase;
@@ -128,7 +129,9 @@ class speculation{
 
     void updateTicks(){
 #ifdef SPEC_USE_TICKS
-        this->ticks+=determ_task_clock_get_last_tx_size();
+        if (isSpeculating()){
+            this->ticks=determ_task_clock_read() - start_ticks;   //determ_task_clock_get_last_tx_size();
+        }
 #else
         
 #endif
@@ -164,6 +167,7 @@ class speculation{
     }
 
     bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
+        updateTicks();
 #ifdef USE_SPECULATION
         if (state==SPEC_STATE_FAILED_THREE){
             *result=1;
@@ -184,19 +188,15 @@ class speculation{
         }
 #ifdef SPEC_USE_TICKS
         else if (entries_count >= max_entries){
+            //cout << "4: " << entries_count << endl;
             *result=4;
             return false;
         }
         else if (ticks < max_ticks){
+            //cout << "5: " << ticks << " " << getpid() << endl;
             *result=5;
             return true;
         }
-#else
-        else if (entries_count < max_entries){
-            *result=6;
-            return true;
-        }
-#endif
         else if (ticks >= max_ticks){
             if (isSpeculating()){
                 *result=11;
@@ -204,8 +204,17 @@ class speculation{
             else{
                 *result=12;
             }
+            //cout << "11: " << ticks << " " << max_ticks  << " " << getpid() << endl;
             return false; 
         }
+#else
+        else if (entries_count < max_entries){
+            //cout << "6: " << entries_count << endl;
+            *result=6;
+            return true;
+        }
+#endif
+       
         else{
             *result=7;
             return false;
@@ -244,6 +253,7 @@ class speculation{
         active_speculative_entries++;
         if (!_checkpoint.is_speculating){
             logical_clock_start=logical_clock;
+            start_ticks = determ_task_clock_read();
             return _checkpoint.checkpoint_begin();
         }
         else{
@@ -265,6 +275,7 @@ class speculation{
             adaptSpeculation(false);
             entries_count=0;
             ticks=0;
+            start_ticks=0;
             //do what we need to do
             _checkpoint.checkpoint_revert();
         }
@@ -283,7 +294,6 @@ class speculation{
              SyncVarEntry * entry = entries[i].entry;
              entry->last_committed=logical_clock;
          }
-         //cout << "commit " << ticks << " " << entries_count << " " << getpid() << endl;
          entries_count=0;
          _checkpoint.is_speculating=false;
          ticks=0;
@@ -307,6 +317,14 @@ class speculation{
 
      int getEntriesCount(){
          return entries_count;
+     }
+
+     uint64_t getCurrentTicks(){
+         return ticks;
+     }
+
+     uint64_t getMaxTicks(){
+         return max_ticks;
      }
 };
 
