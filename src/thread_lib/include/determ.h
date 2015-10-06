@@ -596,18 +596,39 @@ public:
           stats->dirty_pages = dirty_pages;
       }
       determ::getInstance().start_thread_event(tid, DEBUG_TYPE_COMMIT, NULL);
-      //need to set the current globals/heap version number for those using parallel commit
-      incrementCurrentGlobalsVersion();
-      incrementCurrentHeapVersion();
-      xmemory::commit();
-      if (xmemory::get_current_heap_version()!=determ::getInstance().getCurrentHeapVersion()){
-          cout << "heap versions are not synced up"<< endl;
+
+      if (last_committed_heap_version != xmemory::get_current_heap_version() ||
+          last_committed_globals_version != xmemory::get_current_globals_version()){
+
+          uint64_t heap_version_to_wait_for = last_committed_heap_version;
+          uint64_t globals_version_to_wait_for = last_committed_globals_version;
+
+          //need to set the current globals/heap version number for those using parallel commit
+          incrementCurrentGlobalsVersion();
+          incrementCurrentHeapVersion();
+          //we have a situation where someone is about to commit in parallel and its not done yet.
+          //So lets commit through the parallel interface so we'll wait on them
+          xmemory::commit_parallel(heap_version_to_wait_for, globals_version_to_wait_for);
+          
+      }
+      else{
+          //need to set the current globals/heap version number for those using parallel commit
+          incrementCurrentGlobalsVersion();
+          incrementCurrentHeapVersion();
+          xmemory::commit();
+      }
+
+
+      /*if (xmemory::get_current_heap_version()!=determ::getInstance().getCurrentHeapVersion()){
+          cout << "heap versions are not synced up for tid: " << tid << endl;
+          cout << xmemory::get_current_heap_version() << " "  << determ::getInstance().getCurrentHeapVersion() << endl;
           exit(-1);
       }
       if (xmemory::get_current_globals_version()!=determ::getInstance().getCurrentGlobalsVersion()){
-          cout << "globals versions are not synced up"<< endl;
+          cout << "globals versions are not synced up for tid: " << tid << endl;
+          cout << xmemory::get_current_globals_version() << " " << determ::getInstance().getCurrentGlobalsVersion() << endl;
           exit(-1);
-      }
+          }*/
       if (stats){
           stats->partial_unique = xmemory::get_partial_unique_pages();
           stats->merged_pages = xmemory::get_merged_pages();
@@ -1373,6 +1394,9 @@ public:
   }
 
   void barrier_wait(void * b, int threadindex) {
+
+      assert(false);
+      
       BarrierEntry * barr = (BarrierEntry *)getSyncEntry(b);
       //we are committing in parallel, but may need to wait for previous versions to 
       //finish committing...these variables will track which version to wait for.

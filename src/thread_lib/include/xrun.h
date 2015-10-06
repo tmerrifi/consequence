@@ -686,7 +686,7 @@ public:
     static void __mutex_lock_inner(pthread_mutex_t * mutex, bool allow_coarsening) {
         struct local_copy_stats cs;
         int wasSpeculating=0;
-        
+        bool finishCommit=false;
         bool isSingleActiveThread=false;
         int failure_count=0;
         int stack_lock_count=++_lock_count;
@@ -771,18 +771,16 @@ public:
         //Keep in mind, we do this after we acquire the lock, because we don't want to perform multiple updates
         bool shouldUpdate=(_thread_index!=determ::getInstance().getLastTokenPutter());
 
-        //wasSpeculating=endSpeculation();
         //in the event that we were speculating lets do an update, release the token and try to speculate again
         if (wasSpeculating=endSpeculation()){
-            if (shouldUpdate){
-                commitAndUpdateMemory();
-            }
+            commitAndUpdateMemoryParallelBegin();
             int locks_elided_tmp=_speculation->getEntriesCount();
             locks_elided+=locks_elided_tmp;
             //DEBUG_TYPE_SPECULATIVE_COMMIT
             determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_COMMIT, (void *)locks_elided_tmp);  
             _speculation->commitSpeculation(get_ticks_for_speculation());
             putToken();
+            commitAndUpdateMemoryParallelEnd();
             isSpeculating=false;
             goto retry;
         }
@@ -815,14 +813,8 @@ public:
             goto retry;
         }
         else if ((!isSingleActiveThread && !isUsingTxCoarsening)||shouldUpdate){
-            commitAndUpdateMemory(&cs);
-            ticks_to_add+=__ticks_to_add(&cs) + LOGICAL_CLOCK_TIME_LOCK;
-#ifdef DTHREADS_TASKCLOCK_DEBUG
-            cout << "IN-LOCK for thread " << _thread_index << " pid " << getpid()
-                 << " partial " << cs.partial_unique << " dirty " << cs.dirty_pages << " merged "
-                 << cs.merged_pages << " fast forward " << fast_forward_clock() << " total ticks " << ticks_to_add << endl;          
-#endif
-            determ_task_clock_add_ticks(ticks_to_add);
+            commitAndUpdateMemoryParallelBegin();
+            finishCommit = true;
         }
 
         
@@ -846,6 +838,10 @@ public:
         //release the token if need be
         if (!isSingleActiveThread && !isUsingTxCoarsening){
             putToken();
+        }
+
+        if (finishCommit){
+            commitAndUpdateMemoryParallelEnd();
         }
 
     }
@@ -899,6 +895,7 @@ public:
       bool isSpeculating=_speculation->isSpeculating();
       bool isSingleActiveThread=!isSpeculating && singleActiveThread();
       bool isUsingTxCoarsening=!isSpeculating && useTxCoarsening(0);
+      bool finishCommit=false;
       
       
       assert(_lock_count>0);
@@ -957,7 +954,8 @@ public:
       //*************END DEBUG CODE*********************
       if ((!singleActiveThread() && !isUsingTxCoarsening) || shouldUpdate || commitForWaitingThread){
           determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_COMMIT, mutex);
-          commitAndUpdateMemory();
+          commitAndUpdateMemoryParallelBegin();
+          finishCommit=true;
           determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_COMMIT);
       }
       //**************DEBUG CODE**************
@@ -988,6 +986,10 @@ public:
           putToken();
       }
 
+      if (finishCommit){
+          commitAndUpdateMemoryParallelEnd();
+      }
+      
 #ifdef USE_TAGGING
       xmemory::set_local_version_tag(0);
 #endif
@@ -1149,21 +1151,39 @@ public:
         determ::getInstance().commitInSerial(_thread_index,stats);
     }
 
-    static void commitAndUpdateMemoryParallelBegin(){
-        commitAndUpdateMemoryParallelBegin(NULL);
-    }
+    /***PARALLEL COMMIT FUNCTIONS***/
     
+    static void commitAndUpdateMemoryParallelBegin(){
+#ifdef DISABLE_PARALLEL_COMMITS
+        commitAndUpdateMemory();
+#else
+        commitAndUpdateMemoryParallelBegin(NULL);
+#endif
+    }
     static void commitAndUpdateMemoryParallelBegin(struct local_copy_stats * stats){
+#ifdef DISABLE_PARALLEL_COMMITS
+        commitAndUpdateMemory(stats);
+#else
         determ::getInstance().commitAndUpdateMemoryParallelBegin(_thread_index, stats, &heapVersionToWaitFor, &globalsVersionToWaitFor);
+#endif
+    }
+    static void commitAndUpdateMemoryParallelEnd(){
+#ifdef DISABLE_PARALLEL_COMMITS
+        
+#else
+        commitAndUpdateMemoryParallelEnd(NULL);
+
+#endif
+    }
+    static void commitAndUpdateMemoryParallelEnd(struct local_copy_stats * stats){
+#ifdef DISABLE_PARALLEL_COMMITS
+
+#else
+        determ::getInstance().commitAndUpdateMemoryParallelEnd(_thread_index, stats, heapVersionToWaitFor, globalsVersionToWaitFor);
+#endif
     }
 
-    static void commitAndUpdateMemoryParallelEnd(){
-        commitAndUpdateMemoryParallelEnd(NULL);
-    }
-        
-    static void commitAndUpdateMemoryParallelEnd(struct local_copy_stats * stats){
-        determ::getInstance().commitAndUpdateMemoryParallelEnd(_thread_index, stats, heapVersionToWaitFor, globalsVersionToWaitFor);
-    }
+    /***END PARALLEL COMMIT***/
     
     static void sigstopHandle(int signum, siginfo_t * siginfo, void * context) {
         stopClock();
