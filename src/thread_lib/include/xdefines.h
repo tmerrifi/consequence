@@ -63,7 +63,7 @@ public:
   enum { INTERNALHEAP_SIZE = 1048576UL * 30 }; // FIXME 10M 
   enum { PageSize = 4096UL };
   enum { PAGE_SIZE_MASK = (PageSize-1) };
-  enum { NUM_HEAPS = 32 }; // was 16
+  enum { NUM_HEAPS = 128 };
   enum { LOCK_OWNER_BUDGET = 10 };
 
 };

@@ -114,72 +114,22 @@ template<int NumHeaps, class TheHeapType>
 class PPHeap: public TheHeapType {
 public:
 
-	PPHeap(void) {
-
-	  //have we initialized the wrapped functions yet?
-	  if (!WRAP(pthread_mutex_init)){
-	    init_real_functions();
-	  }
-
-		/// The lock's attributes.
-		pthread_mutexattr_t attr;
-
-		// Set up the lock with a shared attribute.
-		pthread_mutexattr_init(&attr);
-		pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
-
-		// Instantiate the lock structure inside a shared mmap.
-		char * base;
-
-		// Allocate a share page to hold all heap metadata.
-		base = (char *) mmap(NULL, sizeof(pthread_mutex_t) * NumHeaps,
-				PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-		if (base == NULL) {
-			fprintf(stderr, "PPheap initialize failed.\n");
-			exit(0);
-		}
-		for (int i = 0; i < NumHeaps; i++) {
-			_lock[i] = (pthread_mutex_t *) ((intptr_t) base + sizeof(pthread_mutex_t) * i);
-			WRAP(pthread_mutex_init)(_lock[i], &attr);
-		}
-	}
-
 	void * malloc(int ind, size_t sz) {
-	  //cout << getpid() << " size " << sz << endl;
-	  //printf("trying to acquire....%d\n", ind);
-	  //sleep(10);
-	  lock(ind);
 	  // Try to get memory from the local heap first.
 	  void * ptr = _heap[ind].malloc(sz);
-	  //printf("in malloc %p\n", ptr);
-	  unlock(ind);
-	  //printf("malloc unlocked %p\n", ptr);
 	  return ptr;
 	}
 
 	void free(int ind, void * ptr) {
-	  lock(ind);
-	  //printf("free locked... %p\n", ptr);
 	  // Put the freed object onto this thread's heap.  Note that this
 	  // policy is essentially pure private heaps, (see Berger et
 	  // al. ASPLOS 2000), and so suffers from numerous known problems.
 	  _heap[ind].free(ptr);
-	  unlock(ind);
-	}
-
-	void lock(int ind) {
-	  //cout << "locking!!!!!!! " << ind << endl;
-	  WRAP(pthread_mutex_lock)(_lock[ind]);
-	}
-
-	void unlock(int ind) {
-          //cout << "unlocking..." << endl;
-	  WRAP(pthread_mutex_unlock)(_lock[ind]);
 	}
 	
 private:
-	pthread_mutex_t * _lock[NumHeaps];
-	TheHeapType _heap[NumHeaps];
+    //pthread_mutex_t * _lock[NumHeaps];
+    TheHeapType _heap[NumHeaps];
 };
 
 template<class SourceHeap, int ChunkSize>
