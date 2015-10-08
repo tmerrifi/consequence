@@ -45,29 +45,15 @@
 #include "heaplayers/zoneheap.h"
 #include "objectheader.h"
 
-#define ALIGN_TO_PAGE 0 // doesn't work...
 template<class SourceHeap>
 class NewSourceHeap: public SourceHeap {
 public:
 	void * malloc(size_t sz) {
 
-#if ALIGN_TO_PAGE
-		if (sz >= 4096 - sizeof(objectHeader)) {
-			sz += 4096;
-		}
-#endif
-
-		//void * ptr = SourceHeap::malloc (size);
-		//fprintf(stderr, "%d in newsourceHeap\n", getpid());
 		void * ptr = SourceHeap::malloc(sz + sizeof(objectHeader));
 		if (!ptr) {
 			return NULL;
 		}
-#if 0 // ALIGN_TO_PAGE
-		if (sz >= 4096 - sizeof(objectHeader)) {
-			ptr = (void *) (((((size_t) ptr) + 4095) & ~4095) - sizeof(objectHeader));
-		}
-#endif
 		objectHeader * o = new (ptr) objectHeader(sz);
 		void * newptr = getPointer(o);
 
