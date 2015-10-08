@@ -554,7 +554,7 @@ void task_clock_entry_stop(struct task_clock_group_info * group_info){
     }
     
     //read the counter and update our clock
-    logical_clock_read_clock_and_update(group_info, __current_tid());
+    logical_clock_read_clock_and_update(group_info, __current_tid(), true);
     
      spin_lock(&group_info->lock);
 
@@ -566,9 +566,15 @@ void task_clock_entry_stop(struct task_clock_group_info * group_info){
     }
 }
 
+void task_clock_entry_read_clock(struct task_clock_group_info * group_info){
+    if (__tick_counter_is_running(group_info)){
+        logical_clock_read_clock_and_update(group_info, __current_tid(), false);
+    }
+}
+
 //just like regular stop, just don't try and wake any one up. Or grab the lock!
 void task_clock_entry_stop_no_notify(struct task_clock_group_info * group_info){
-    logical_clock_read_clock_and_update(group_info, __current_tid());
+    logical_clock_read_clock_and_update(group_info, __current_tid(), true);
 }
 
 //lets start caring about the ticks we see (again)
@@ -620,6 +626,7 @@ int init_module(void)
     task_clock_func.task_clock_entry_reset=task_clock_entry_reset;
     task_clock_func.task_clock_entry_start_no_notify=task_clock_entry_start_no_notify;
     task_clock_func.task_clock_entry_stop_no_notify=task_clock_entry_stop_no_notify;
+    task_clock_func.task_clock_entry_read_clock=task_clock_entry_read_clock;
 #ifdef USE_BOUNDED_FENCE
     task_clock_func.task_clock_entry_is_singlestep=task_clock_entry_is_singlestep;
 #else
@@ -646,5 +653,6 @@ void cleanup_module(void)
   task_clock_func.task_clock_entry_stop=NULL;
   task_clock_func.task_clock_entry_start=NULL;
   task_clock_func.task_clock_entry_is_singlestep=NULL;
-
+  task_clock_func.task_clock_entry_read_clock=NULL;
+  
 }

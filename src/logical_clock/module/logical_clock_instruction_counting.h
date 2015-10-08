@@ -71,7 +71,7 @@ static inline void __read_performance_counter(struct hw_perf_event * hwc, uint64
     *_new_pmc=new_pmc;
 }
 
-static inline void logical_clock_read_clock_and_update(struct task_clock_group_info * group_info, int id){
+static inline void logical_clock_read_clock_and_update(struct task_clock_group_info * group_info, int id, bool turn_off_counter){
     uint64_t new_raw_count, prev_raw_count, new_pmc;
     int64_t delta;
     //for our version of perf counters (v3 for Intel) this works...probably not for anything else
@@ -84,7 +84,9 @@ static inline void logical_clock_read_clock_and_update(struct task_clock_group_i
     __read_performance_counter(hwc, &new_raw_count, &prev_raw_count, &new_pmc);
     //if this succeeds, then its safe to turn off the tick_counter...meaning we no longer do work inside the overflow handler.
     //Even if an NMI beats us to it...it won't have any work to do since prev_raw_count==new_raw_count after the cmpxchg
-    __tick_counter_turn_off(group_info);
+    if (turn_off_counter){
+        __tick_counter_turn_off(group_info);
+    }
     //compute how much the counter has counted. The shift is used since only the first N (currently hard-coded to 48) bits matter
     delta = (new_raw_count << shift) - (prev_raw_count << shift);
     //shift it back to get the actually correct number

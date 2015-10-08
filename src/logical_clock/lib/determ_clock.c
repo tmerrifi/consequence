@@ -199,6 +199,15 @@ u_int64_t determ_task_clock_read(){
     return task_clock_info.user_status->ticks + task_clock_info.coarsened_ticks_counter;
 }
 
+u_int64_t determ_task_clock_force_read(){
+    if ( ioctl(task_clock_info.perf_counter.fd, PERF_EVENT_IOC_TASK_CLOCK_READ_CLOCK, 0) != 0){
+        printf("\nreset failed\n");
+        exit(EXIT_FAILURE);
+    }    
+    return task_clock_info.user_status->ticks + task_clock_info.coarsened_ticks_counter;
+}
+
+
 void determ_task_clock_reset(){
     if ( ioctl(task_clock_info.perf_counter.fd, PERF_EVENT_IOC_TASK_CLOCK_RESET, 0) != 0){
         printf("\nreset failed\n");
@@ -303,7 +312,7 @@ void determ_task_clock_activate(){
 }
 
 void determ_task_clock_add_ticks(int32_t ticks){
-    if ( ioctl(task_clock_info.perf_counter.fd, PERF_EVENT_IOC_TASK_CLOCK_ADD_TICKS, ticks) != 0){
+    if ( ticks > 0 && ioctl(task_clock_info.perf_counter.fd, PERF_EVENT_IOC_TASK_CLOCK_ADD_TICKS, ticks) != 0){
         printf("\nClock start failed\n");
         exit(EXIT_FAILURE);
     }

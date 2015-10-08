@@ -609,11 +609,11 @@ public:
         endTXCoarsening();
     }
     
-    static void stopClock(size_t id){
+    static void stopClock(size_t id, bool forceOnSpec){
         if (inCoarsenedTx()){
             determ_task_clock_stop_with_id_no_notify(id);
         }
-        else{
+        else if (!_speculation->isSpeculating() || forceOnSpec){
             determ_task_clock_stop_with_id(id);
         }
 #ifdef TRACK_LIBRARY_CYCLES
@@ -621,11 +621,22 @@ public:
 #endif
     }
 
+    static void stopClock(size_t id){
+        stopClock(id, false);
+    }
+    
     static void stopClock(void){
+
         stopClock(0);
     }
 
+
     static void startClock(void){
+
+        startClock(false);
+    }
+    
+    static void startClock(bool forceStartOnSpec){
 #ifdef TRACK_LIBRARY_CYCLES
         unsigned long long lib_cycles=determ_task_clock_read_cycle_counter() - last_cycle_read;
         //sanity check
@@ -637,8 +648,8 @@ public:
         if (inCoarsenedTx()){
             determ_task_clock_start_no_notify();
         }
-        else{
-            determ_task_clock_start();       
+        else if (!_speculation->isSpeculating() || forceStartOnSpec){
+            determ_task_clock_start();
         }
     }
 
@@ -691,10 +702,6 @@ public:
         int failure_count=0;
         int stack_lock_count=++_lock_count;
         bool isSpeculating=_speculation->isSpeculating();
-
-        /*if (isSpeculating){
-            _speculation->updateTicks();
-            }*/
 
         //should we use the tx coarsening?
         bool isUsingTxCoarsening= !isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
@@ -760,6 +767,11 @@ public:
 
                 
         determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_NOSPEC, (void *)shouldSpecResult);
+
+        //the clock has been running this whole time...lets stop it before we try to grab the token (nondeterministic)
+        if (isSpeculating){
+            stopClock(0,true);
+        }
         
         //get the token, assuming its not just us and we don't already own it
         if ((!isSingleActiveThread && !_token_holding) || failure_count>0) {
@@ -847,12 +859,12 @@ public:
     }
 
     static void mutex_lock(pthread_mutex_t * mutex) {
-
         timespec t1,t2;
+        bool isSpeculating = _speculation->isSpeculating();
         stopClock();
 
         //**************DEBUG CODE**************
-        if (_speculation->isSpeculating()){
+        if (isSpeculating){
             determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
         }
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
@@ -868,8 +880,17 @@ public:
         //**************DEBUG CODE**************
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
         //*************END DEBUG CODE*********************
-        startClock();
 
+        
+        if (_speculation->isSpeculating() && _speculation->getEntriesCount()==1){
+            //we just started a speculation and the clock is stopped. We need to make sure we start it but the
+            //regular startClock(void) function does nothing if we are speculating.
+            startClock(true);
+        }
+        else{
+            startClock();
+        }
+        
         //*****DEBUG CODE************************/
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
         //******************************************/

@@ -112,7 +112,7 @@
      void determ_task_clock_init();
      void determ_task_clock_init_with_id(u_int32_t id);
      u_int64_t determ_task_clock_read();
-
+     u_int64_t determ_task_clock_force_read();
      u_int64_t determ_debug_notifying_clock_read();
      int determ_debug_notifying_id_read();
      int determ_debug_notifying_sample_read();

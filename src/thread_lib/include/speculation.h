@@ -130,7 +130,7 @@ class speculation{
     void updateTicks(){
 #ifdef SPEC_USE_TICKS
         if (isSpeculating()){
-            this->ticks=determ_task_clock_read() - start_ticks;   //determ_task_clock_get_last_tx_size();
+            this->ticks=determ_task_clock_force_read() - start_ticks;   //determ_task_clock_get_last_tx_size();
         }
 #else
         
