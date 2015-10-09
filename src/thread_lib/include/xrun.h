@@ -622,17 +622,25 @@ public:
     }
 
     static void stopClock(size_t id){
+        //normally we always want to force a stop, even on speculation
+        stopClock(id, true);
+    }
+
+    static void stopClockAllowSpec(){
+        stopClock(0,false);
+    }
+
+    static void stopClockAllowSpec(size_t id){
         stopClock(id, false);
     }
+
     
     static void stopClock(void){
-
         stopClock(0);
     }
 
 
     static void startClock(void){
-
         startClock(false);
     }
     
@@ -770,7 +778,7 @@ public:
 
         //the clock has been running this whole time...lets stop it before we try to grab the token (nondeterministic)
         if (isSpeculating){
-            stopClock(0,true);
+            stopClock();
         }
         
         //get the token, assuming its not just us and we don't already own it
@@ -861,8 +869,8 @@ public:
     static void mutex_lock(pthread_mutex_t * mutex) {
         timespec t1,t2;
         bool isSpeculating = _speculation->isSpeculating();
-        stopClock();
-
+        stopClockAllowSpec();
+        
         //**************DEBUG CODE**************
         if (isSpeculating){
             determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
@@ -903,7 +911,8 @@ public:
 
 
   static void mutex_unlock(pthread_mutex_t * mutex) {
-      stopClock((size_t)mutex);
+      stopClockAllowSpec((size_t)mutex);
+      
       //**************DEBUG CODE**************
       if (_speculation->isSpeculating()){
           determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
