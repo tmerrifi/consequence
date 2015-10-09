@@ -305,7 +305,8 @@ public:
   }
 
   static void threadDeregister(void) {
-      stopClock();
+      stopClockForceEnd();
+
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
 #ifdef DTHREADS_TASKCLOCK_DEBUG
       cout << "thread deregister " << determ_task_get_id() << " count " << determ_task_clock_read() << " pid " << getpid() << endl;
@@ -354,7 +355,7 @@ public:
         //we use this to designate the "end" of the user's stack. This i
         uint8_t end_of_user_stack_marker;
 
-        stopClockNoCoarsen();
+        stopClockForceEndNoCoarsen();
         
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
 
@@ -403,7 +404,7 @@ public:
     int  child_threadindex = 0;
     bool wakeupChildren = false;
 
-    stopClockNoCoarsen();
+    stopClockForceEndNoCoarsen();
 
     // Return immediately if the thread argument is NULL.
     if (v == NULL) {
@@ -458,7 +459,7 @@ public:
   /// @brief Do a pthread_cancel
   static void cancel(void *v) {
     int threadindex;
-    stopClockNoCoarsen();
+    stopClockForceEndNoCoarsen();
     waitToken();
     commitAndUpdateMemoryTerminateSpeculation();
     threadindex = xthread::cancel(v);
@@ -473,10 +474,31 @@ public:
     
     /* Heap-related functions. */
   static inline void * malloc(size_t sz) {
-      stopClock();
-      waitToken();
-      commitAndUpdateMemoryTerminateSpeculation();
+      if (!_speculation->isSpeculating() ||
+          _speculation->getMallocEntryCount() >= SPECULATION_MALLOC_ENTRIES){
+          stopClockForceEnd();
+          waitToken();
+          commitAndUpdateMemoryTerminateSpeculation();
+      }
       void * ptr = conseq_malloc::malloc(sz);
+      if (ptr==NULL && _speculation->isSpeculating()){
+          //we would get here if the thread-local heap tried to allocate from the shared heap
+          stopClockForceEnd();
+          waitToken();
+          commitAndUpdateMemoryTerminateSpeculation();
+          
+          ptr = conseq_malloc::malloc(sz);
+          if (ptr==NULL){
+              cout << "whoops we are having an issue with malloc on speculation!!!!! " << endl;
+              exit(-1);
+          }
+      }
+
+      if (_speculation->isSpeculating()){
+          //if we are still speculating, add the newly allocated ptr to the malloc list
+          _speculation->addMallocEntry(ptr);
+      }
+      
       startClock();
       return ptr;
   }
@@ -484,7 +506,7 @@ public:
       return conseq_malloc::calloc(nmemb, sz);
   }
   static inline void free(void * ptr) {
-      stopClock();
+      stopClockForceEnd();
       waitToken();
       commitAndUpdateMemoryTerminateSpeculation();
       conseq_malloc::free(ptr);
@@ -494,7 +516,7 @@ public:
       return conseq_malloc::getSize(ptr);
   }
   static inline void * realloc(void * ptr, size_t sz) {
-      stopClock();
+      stopClockForceEnd();
       waitToken();
       commitAndUpdateMemoryTerminateSpeculation();
       return conseq_malloc::realloc(ptr,sz);
@@ -603,12 +625,6 @@ public:
   }
 
 
-    //stops the clock and ends any coarsening
-    static void stopClockNoCoarsen(){
-        stopClock();
-        endTXCoarsening();
-    }
-    
     static void stopClock(size_t id, bool forceOnSpec){
         if (inCoarsenedTx()){
             determ_task_clock_stop_with_id_no_notify(id);
@@ -621,26 +637,27 @@ public:
 #endif
     }
 
+    static void stopClockForceEnd(){
+        stopClock(0, true);
+    }
+
+    static void stopClockForceEndNoCoarsen(){
+        stopClock(0, true);
+        endTXCoarsening();
+    }
+    
     static void stopClock(size_t id){
-        //normally we always want to force a stop, even on speculation
-        stopClock(id, true);
-    }
-
-    static void stopClockAllowSpec(){
-        stopClock(0,false);
-    }
-
-    static void stopClockAllowSpec(size_t id){
         stopClock(id, false);
     }
-
     
     static void stopClock(void){
+
         stopClock(0);
     }
 
 
     static void startClock(void){
+
         startClock(false);
     }
     
@@ -737,8 +754,9 @@ public:
             if (_speculation->speculate(mutex,_last_token_release_time)==true){
 #endif
                 if (!isSpeculating){
-                    //beginning a speculation
+                    //HERE we know that we are beginning a speculation
                     spec_dirty_count=0;
+                    xmemory::begin_speculation();
                     determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
                 }
                 determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_LOCK, mutex);
@@ -778,7 +796,7 @@ public:
 
         //the clock has been running this whole time...lets stop it before we try to grab the token (nondeterministic)
         if (isSpeculating){
-            stopClock();
+            stopClock(0,true);
         }
         
         //get the token, assuming its not just us and we don't already own it
@@ -799,6 +817,7 @@ public:
             //DEBUG_TYPE_SPECULATIVE_COMMIT
             determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_COMMIT, (void *)locks_elided_tmp);  
             _speculation->commitSpeculation(get_ticks_for_speculation());
+            xmemory::end_speculation();
             putToken();
             commitAndUpdateMemoryParallelEnd();
             isSpeculating=false;
@@ -869,8 +888,8 @@ public:
     static void mutex_lock(pthread_mutex_t * mutex) {
         timespec t1,t2;
         bool isSpeculating = _speculation->isSpeculating();
-        stopClockAllowSpec();
-        
+        stopClock();
+
         //**************DEBUG CODE**************
         if (isSpeculating){
             determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
@@ -911,8 +930,7 @@ public:
 
 
   static void mutex_unlock(pthread_mutex_t * mutex) {
-      stopClockAllowSpec((size_t)mutex);
-      
+      stopClock((size_t)mutex);
       //**************DEBUG CODE**************
       if (_speculation->isSpeculating()){
           determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
@@ -1005,7 +1023,8 @@ public:
 
       if (wasSpeculating){
           locks_elided+=_speculation->getEntriesCount();
-          _speculation->commitSpeculation(get_ticks_for_speculation());          
+          _speculation->commitSpeculation(get_ticks_for_speculation());
+          xmemory::end_speculation();
       }
       else{
           _speculation->updateLastCommittedTime(mutex,get_ticks_for_speculation());
@@ -1059,7 +1078,7 @@ public:
   }
   
   static void cond_wait(void * cond, void * lock) {
-      stopClock();
+      stopClockForceEnd();
       bool acquiringToken=(!_token_holding);
       //**************DEBUG CODE**************
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
@@ -1107,7 +1126,7 @@ public:
   
 
   static void cond_broadcast(void * cond) {
-      stopClock();
+      stopClockForceEnd();
       //if we are in a coarse tx, we're about to signal another thread...so reset it
       resetTXCoarsening();
       //if we don't already own the token, we need to commit. 
@@ -1133,7 +1152,8 @@ public:
   }
 
   static void cond_signal(void * cond) {
-      stopClock();
+      stopClockForceEnd();
+
       //if we are in a coarse tx, we're about to signal another thread...so reset it
       resetTXCoarsening();
       //if we don't already own the token, we need to commit. 
@@ -1172,6 +1192,7 @@ public:
             determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
             locks_elided+=_speculation->getEntriesCount();
             _speculation->commitSpeculation(get_ticks_for_speculation());
+            xmemory::end_speculation();
             determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, NULL);
         }
         commitAndUpdateMemory();

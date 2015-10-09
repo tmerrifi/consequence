@@ -6,6 +6,8 @@
 #include "checkpoint.h"
 #include "sync_types.h"
 
+#include "conseq_malloc.h"
+
 #include <determ_clock.h>
 
 #ifdef TOKEN_ORDER_ROUND_ROBIN
@@ -25,6 +27,8 @@
 #endif 
 
 #define SPECULATION_ENTRIES_MAX_ALLOCATED (SPECULATION_ENTRIES_MAX+50)
+
+#define SPECULATION_MALLOC_ENTRIES 128
 
 #ifdef USE_CYCLES_TICKS
 
@@ -93,6 +97,10 @@ class speculation{
     uint8_t state;
     bool learning_phase;
     uint32_t learning_phase_count;
+    size_t malloc_entries[SPECULATION_MALLOC_ENTRIES];
+    size_t free_entries[SPECULATION_MALLOC_ENTRIES];
+    uint32_t malloc_entries_count;
+    uint32_t free_entries_count;
     
      bool verify_synchronization(){
         for (int i=0;i<entries_count;i++){
@@ -122,8 +130,9 @@ class speculation{
 #else
         learning_phase=true;
 #endif
-        
         learning_phase_count=0;
+        malloc_entries_count=0;
+        free_entries_count=0;
     }
 
 
@@ -271,11 +280,18 @@ class speculation{
         if (!isSpeculating()){
             return 0;
         }
-        else if (!verify_synchronization()){
+        else if (!verify_synchronization() || active_speculative_entries > 0){
             adaptSpeculation(false);
             entries_count=0;
             ticks=0;
             start_ticks=0;
+            //need to free everything we malloc'd
+            for (int i=0;i<malloc_entries_count;i++){
+                conseq_malloc::free((void *)malloc_entries[i]);
+            }
+            malloc_entries_count=0;
+            free_entries_count=0;
+            
             //do what we need to do
             _checkpoint.checkpoint_revert();
         }
@@ -294,7 +310,14 @@ class speculation{
              SyncVarEntry * entry = entries[i].entry;
              entry->last_committed=logical_clock;
          }
+         //free all of the stuff we were asked to free
+         for (int i=0;i<free_entries_count;i++){
+             conseq_malloc::free((void *)free_entries[i]);
+         }
+         
          entries_count=0;
+         malloc_entries_count=0;
+         free_entries_count=0;
          _checkpoint.is_speculating=false;
          ticks=0;
          seq_num++;
@@ -315,6 +338,25 @@ class speculation{
         }
      }
 
+     void addMallocEntry(void * ptr){
+         malloc_entries[malloc_entries_count]=(size_t)ptr;
+         malloc_entries_count++;
+     }
+     
+     void addFreeEntry(void * ptr){
+         free_entries[free_entries_count]=(size_t)ptr;
+         free_entries_count++;
+     }
+
+     
+     int getMallocEntryCount(){
+         return malloc_entries_count;
+     }
+
+     int getFreeEntryCount(){
+         return free_entries_count;
+     }
+     
      int getEntriesCount(){
          return entries_count;
      }

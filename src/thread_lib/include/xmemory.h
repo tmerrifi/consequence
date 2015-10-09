@@ -289,6 +289,15 @@ public:
       _globals.revert_heap_and_globals();
     }
 
+    static inline void begin_speculation(){
+        _pheap.begin_speculation();
+        _globals.begin_speculation();
+    }
+
+    static inline void end_speculation(){
+        _pheap.end_speculation();
+        _globals.end_speculation();
+    }
 };
 
 #endif

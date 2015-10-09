@@ -3,7 +3,7 @@ SRC_DIR = source
 
 SRCS = $(SRC_DIR)/checkpoint.cpp $(SRC_DIR)/xrun.cpp $(SRC_DIR)/xthread.cpp $(SRC_DIR)/xmemory.cpp $(SRC_DIR)/prof.cpp $(SRC_DIR)/real.cpp $(SRC_DIR)/libdthread.cpp
 
-DEPS = $(SRCS) $(INC_DIR)/syncstats.h $(INC_DIR)/speculation.h $(INC_DIR)/sync_types.h $(INC_DIR)/xpersist.h $(INC_DIR)/checkpoint.h $(INC_DIR)/xdefines.h $(INC_DIR)/xglobals.h $(INC_DIR)/xpersist.h $(INC_DIR)/xplock.h $(INC_DIR)/xrun.h $(INC_DIR)/warpheap.h $(INC_DIR)/xadaptheap.h $(INC_DIR)/xoneheap.h $(INC_DIR)/determ.h
+DEPS = $(SRCS) $(INC_DIR)/syncstats.h $(INC_DIR)/speculation.h $(INC_DIR)/sync_types.h $(INC_DIR)/xpersist.h $(INC_DIR)/checkpoint.h $(INC_DIR)/xdefines.h $(INC_DIR)/xglobals.h $(INC_DIR)/xpersist.h $(INC_DIR)/xplock.h $(INC_DIR)/xrun.h $(INC_DIR)/xheap.h $(INC_DIR)/warpheap.h $(INC_DIR)/xadaptheap.h $(INC_DIR)/xoneheap.h $(INC_DIR)/determ.h
 
 INCLUDE_DIRS = -I$(INC_DIR) -I$(INC_DIR)/heaplayers -I$(INC_DIR)/heaplayers/util
 

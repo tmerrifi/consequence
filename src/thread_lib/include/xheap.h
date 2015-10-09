@@ -87,6 +87,12 @@ public:
 	inline void * malloc(size_t sz) {
 		sanityCheck();
 
+#ifdef USE_SPECULATION
+                if (parent::is_speculating()){
+                    return NULL;
+                }
+#endif
+                
 		// Roud up the size to page aligned.
 		sz = xdefines::PageSize * ((sz + xdefines::PageSize - 1)
 				/ xdefines::PageSize);

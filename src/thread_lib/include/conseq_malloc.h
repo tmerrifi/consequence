@@ -1,3 +1,6 @@
+#ifndef CONSEQ_MALLOC_H
+#define CONSEQ_MALLOC_H
+
 
 #include "xmemory.h"
 
@@ -40,3 +43,5 @@ class conseq_malloc{
         return newptr;
     }
 };
+
+#endif

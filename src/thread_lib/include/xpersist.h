@@ -114,6 +114,7 @@ public:
       ::abort();
     }
     _snapMemory = (char *)snap_memory->segment;
+    isSpeculating = false;
   }
 
   void clearUserInfo(void){}
@@ -273,8 +274,22 @@ public:
         return snap_memory->segment;
     }
 
+    inline void begin_speculation(){
+        isSpeculating = true;
+    }
+
+    inline void end_speculation(){
+        isSpeculating = false;
+    }
+
+    inline bool is_speculating(){
+        return isSpeculating;
+    }
+    
 private:
 
+    bool isSpeculating;
+    
     /// True if current xpersist.h is a heap.
     bool _isHeap;
     
