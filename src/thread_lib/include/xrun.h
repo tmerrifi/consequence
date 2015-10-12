@@ -486,7 +486,6 @@ public:
           stopClockForceEnd();
           waitToken();
           commitAndUpdateMemoryTerminateSpeculation();
-          
           ptr = conseq_malloc::malloc(sz);
           if (ptr==NULL){
               cout << "whoops we are having an issue with malloc on speculation!!!!! " << endl;
@@ -506,10 +505,20 @@ public:
       return conseq_malloc::calloc(nmemb, sz);
   }
   static inline void free(void * ptr) {
-      stopClockForceEnd();
-      waitToken();
-      commitAndUpdateMemoryTerminateSpeculation();
-      conseq_malloc::free(ptr);
+
+      if (!_speculation->isSpeculating() ||
+          _speculation->getFreeEntryCount() >= SPECULATION_MALLOC_ENTRIES){
+          stopClockForceEnd();
+          waitToken();
+          commitAndUpdateMemoryTerminateSpeculation();
+          cout << "freeing for real: " << ptr << " " << getpid() << endl;
+          conseq_malloc::free(ptr);
+      }
+      else{
+          _speculation->addFreeEntry(ptr);
+      }
+     
+
       startClock();
   }
   static inline size_t getSize(void * ptr) {
@@ -780,6 +789,7 @@ public:
                 _lock_count=stack_lock_count;
                 //we just got back from a rolled back speculation
                 determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_FAILED_SPECULATION, (void *)id);
+                xmemory::end_speculation();
                 reverts++;
             }
         }

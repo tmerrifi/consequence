@@ -188,6 +188,7 @@ class speculation{
                 exit(-1);
             }
             *result=2;
+            //cout << "0: " << entries_count << endl;
             //we have to keep going here...otherwise if we stop speculating we'll need to actually acquire the lock
             return true;
         }
@@ -260,9 +261,11 @@ class speculation{
         entries[entries_count].acquisition_logical_time=logical_clock;
         entries_count++;
         active_speculative_entries++;
+        //cout << "adding " << entry_ptr << " " << active_speculative_entries << endl;
         if (!_checkpoint.is_speculating){
             logical_clock_start=logical_clock;
             start_ticks = determ_task_clock_read();
+            cout << "beginning!!! " << getpid() << endl;
             return _checkpoint.checkpoint_begin();
         }
         else{
@@ -287,11 +290,13 @@ class speculation{
             start_ticks=0;
             //need to free everything we malloc'd
             for (int i=0;i<malloc_entries_count;i++){
+                size_t * tmpptr = (size_t *)malloc_entries[i];
+                cout << "rollback freeing " << (void *)malloc_entries[i] << " " << getpid() << " " << *(tmpptr - 2) <<  endl;
                 conseq_malloc::free((void *)malloc_entries[i]);
             }
             malloc_entries_count=0;
             free_entries_count=0;
-            
+            active_speculative_entries=0;
             //do what we need to do
             _checkpoint.checkpoint_revert();
         }
@@ -302,16 +307,21 @@ class speculation{
      void endSpeculativeEntry(void * entry_ptr){
          assert(active_speculative_entries>0);
          active_speculative_entries--;
+         //cout << "ending " << entry_ptr << " " << active_speculative_entries << endl;
      }
      
      void commitSpeculation(uint64_t logical_clock){
          char str[500];
+
+         cout << "commit " << getpid() << endl;
+         
          for (int i=0;i<entries_count;i++){
              SyncVarEntry * entry = entries[i].entry;
              entry->last_committed=logical_clock;
          }
          //free all of the stuff we were asked to free
          for (int i=0;i<free_entries_count;i++){
+             cout << "commit freeing " << (void *)free_entries[i] << " " << getpid() << endl;
              conseq_malloc::free((void *)free_entries[i]);
          }
          
@@ -341,11 +351,13 @@ class speculation{
      void addMallocEntry(void * ptr){
          malloc_entries[malloc_entries_count]=(size_t)ptr;
          malloc_entries_count++;
+         cout << "adding malloc entry " << ptr << " " << getpid() << endl;
      }
      
      void addFreeEntry(void * ptr){
          free_entries[free_entries_count]=(size_t)ptr;
          free_entries_count++;
+         cout << "adding free entry " << ptr << " " << getpid() << endl;
      }
 
      

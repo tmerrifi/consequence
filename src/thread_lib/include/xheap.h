@@ -166,8 +166,9 @@ private:
 
 	void sanityCheck(void) {
 		if (*_magic != 0xCAFEBABE) {
-			fprintf(stderr, "%d : WTF with magic %Zx!\n", getpid(), *_magic);
-			::abort();
+                    //fprintf(stderr, "%d : WTF with magic %Zx!\n", getpid(), *_magic);
+                    cout << "whoops!!!! " << endl;
+                    ::abort();
 		}
 	}
 
