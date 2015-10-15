@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stddef.h>
 
 #include <fstream>
 #include <sstream>
@@ -57,9 +58,10 @@ void * checkpoint::find_stack_top(void){
 
 
 	checkpoint::checkpoint(){
-		failed = false;
-		is_speculating = false;
-		stack_start = (size_t) find_stack_top();
+            cout << "checkpoint constructor" << endl;
+            failed = false;
+            is_speculating = false;
+            stack_start = (size_t) find_stack_top();
 	}
 
  	bool checkpoint::checkpoint_begin(){
@@ -130,9 +132,14 @@ void * checkpoint::find_stack_top(void){
  		__asm__ __volatile__ ("movq 0x58(%%r13), %%r12;" : :);
  		__asm__ __volatile__ ("movq 0(%%r13), %%r15;": : : "memory"); // ebp
  		__asm__ __volatile__("movq 0x8(%%r13), %%r14;": :); //esp
-
+                __asm__ __volatile__("movq 0x6400088(%%r13), %%rcx;": :); //stack_size_at_checkpoint_begin
+                
+                __asm__ __volatile__ ("movq %%r13, %%rsi;" : :);
+                __asm__ __volatile__ ("add $0x88, %%rsi;" : :); //getting to stack_copy addr
+                __asm__ __volatile__("movq 0x80(%%r13), %%rdi;": :); //stack_start
+                __asm__ __volatile__("sub %%rcx,%%rdi;": :); //subtract stack_size_at_checkpoint_begin from stack_start                
  		//memcpy
- 		__asm__ volatile ( "cld\n\t" "rep movsb" : : "S" (stack_copy), "D" (stack_start - stack_size_at_checkpoint_begin), "c" (stack_size_at_checkpoint_begin) );
+ 		__asm__ volatile ( "cld\n\t" "rep movsb" : :);
 
                 __asm__ __volatile__ ("movq 0x10(%%r13), %%rdi;" : :);
  		__asm__ __volatile__ ("movq 0x18(%%r13), %%rsi;" : :);
