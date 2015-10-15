@@ -659,11 +659,6 @@ public:
 
   
   inline void commitAndUpdateMemoryParallelEnd(int tid, struct local_copy_stats * stats, uint64_t heap_version_to_wait_for, uint64_t globals_version_to_wait_for){
-      //no reason not to be holding the token here
-      if (isTokenHolder(tid)){
-          cout << "error: shoudl not hold the token when committing in parallel" << endl;
-          exit(-1);
-      }
       uint32_t dirty_pages=xmemory::get_dirty_pages();
       start_thread_event(tid, DEBUG_TYPE_COMMIT, NULL);
       if (stats){
