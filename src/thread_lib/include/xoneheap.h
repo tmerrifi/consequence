@@ -168,14 +168,6 @@ public:
     return getHeap()->setThreadIndex(index);
   }
 
-    void begin_speculation(){
-        getHeap()->begin_speculation();
-    }
-
-    void end_speculation(){
-        getHeap()->end_speculation();
-    }
-    
   void * malloc(size_t sz) {
     return getHeap()->malloc(sz);
   }

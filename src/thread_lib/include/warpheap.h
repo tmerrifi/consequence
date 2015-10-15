@@ -126,6 +126,20 @@ public:
 	  // al. ASPLOS 2000), and so suffers from numerous known problems.
 	  _heap[ind].free(ptr);
 	}
+
+    void begin_speculation(int ind){
+        _heap[ind].begin_speculation();
+    }
+
+    void end_speculation(int ind){
+        _heap[ind].end_speculation();
+    }
+
+    void revert(int ind){
+        _heap[ind].revert_speculation();
+    }
+
+    
 	
 private:
     //pthread_mutex_t * _lock[NumHeaps];

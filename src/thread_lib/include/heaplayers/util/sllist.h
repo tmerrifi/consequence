@@ -58,6 +58,12 @@ namespace HL {
 	return NULL;
       }
       head.next = e->next;
+      if (head.next==(void *)0x666){
+          cout << "whoops! something went wrong here " << e << " " << getpid() << endl;
+      }
+      else{
+          //cout << "g: " << e << " " << getpid() << endl;
+      }
       return (Entry *) e;
     }
 
@@ -71,14 +77,51 @@ namespace HL {
       abort();
     }
 
+      bool __search(Entry * e){
+          Entry * i = head.next;
+          while(i){
+              if (i==e){
+                  return true;
+              }
+              else{
+                  i=i->next;
+              }
+          }
+          return false;
+      }
+
   public:
 
     /// Inserts an entry into the head of the list.
     inline void insert (Entry * e) {
-      e->next = head.next;
-      head.next = e;
+        if (e->next!=(void *)0x666){
+            //cout << "i: " << e << " " << getpid() << " " << e->next << " i: " << *((int *)0x90a8024) << endl;
+        }
+        else{
+            //cout << "i: " << e << " " << getpid() << " " << e->next << " " << *((int *)((char *)e + 16)) << " i: " << *((int *)0x90a8024) << endl;
+        }
+        if (e->next!=(void *)0x666 && __search(e)){
+            cout << "whoops!: " << e << endl;
+            //assert(false);
+        }
+        e->next = head.next;
+        head.next = e;
     }
 
+      inline void checkpoint(){
+          head_backup = head;
+          //cout << "sllist: checkpoint " << head.next << " " << head_backup.next << endl;
+      }
+
+      void restore(){
+          //cout << "sllist: restore " << head.next << " " << head_backup.next << endl;
+          head=head_backup;
+          if (head.next==(void *)0x666){
+              //cout << "ummmm! something went wrong here" << endl;
+          }
+
+      }
+      
     /// An entry in the list.
     class Entry {
     public:
@@ -96,6 +139,7 @@ namespace HL {
     /// The head of the list.
     Entry head;
 
+      Entry head_backup;
   };
 
 }

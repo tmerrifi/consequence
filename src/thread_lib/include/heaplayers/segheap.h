@@ -59,6 +59,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <assert.h>
 #include "bitstring.h"
 
+#include <typeinfo>
+
   namespace HL {
 
     template <int NumBins,
@@ -187,6 +189,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 
       void clear (void) {
+          
 	int i;
 	for (i = 0; i < NumBins; i++) {
 	  myLittleHeap[i].clear();
@@ -242,11 +245,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
       size_t memoryHeld;
 
-      const size_t maxObjectSize;
-
       // The little heaps.
       LittleHeap myLittleHeap[NumBins];
 
+    public:
+
+        const size_t maxObjectSize;
+        
     };
 
   };
@@ -287,8 +292,74 @@ namespace HL {
     typedef int (*scFunction) (const size_t);
     typedef size_t (*csFunction) (const int);
 
+      ///
+      int binsToRestore[NumBins];
+      int binsToRestoreCount;
+      
+      bool isSpeculating;
+
+      void addRestoreBin(int bin){
+          if (!super::myLittleHeap[bin].isCheckpointed()){
+              //cout << "segheap: addRestoreBin " << bin << endl;
+              binsToRestore[binsToRestoreCount++]=bin;
+          }
+          else{
+              //cout << "segheap: addRestoreBin alreadychecked " << bin << endl;
+          }
+      }
+
+
+      int popRestoreBin(){
+          int bin=-1;
+          if (binsToRestoreCount>0){
+              binsToRestoreCount--;
+              bin=binsToRestore[binsToRestoreCount];
+          }
+          return bin;
+      }
+
+      void __attribute__ ((noinline)) restoreBins(bool revert){
+          for (int i=0;i<binsToRestoreCount;i++){
+              if (revert){
+                  //cout << "segheap: revert " << binsToRestore[i] << endl;
+                  super::myLittleHeap[binsToRestore[i]].revert();
+              }
+              else{
+                  //cout << "segheap: end " << binsToRestore[i] << endl;
+                  super::myLittleHeap[binsToRestore[i]].endCheckpoint();
+              }
+          }
+          binsToRestoreCount=0;
+      }
+
   public:
 
+      inline StrictSegHeap (void) : isSpeculating(false) {
+
+      }
+      
+      void begin_speculation(){
+          //cout << "segheap: begin_speculation" << " " << this << " " << getpid() << endl;
+          //clear the bins to Restore
+          binsToRestoreCount=0;
+          isSpeculating=true;
+          super::bigheap.begin_speculation();
+      }
+
+      void revert_speculation(){
+          //cout << "segheap: revert_speculation" << " " << this << " " << getpid() << endl;
+          restoreBins(true);
+          isSpeculating=false;
+          super::bigheap.revert_speculation();
+      }
+
+      void end_speculation(){
+          //cout << "segheap: end_speculation" << " " << this << " " << getpid() << endl;
+          restoreBins(false);
+          isSpeculating=false;
+          super::bigheap.end_speculation();
+      }
+      
     void freeAll (void) {
       int i;
       for (i = 0; i < NumBins; i++) {
@@ -312,7 +383,6 @@ namespace HL {
 
     inline void * malloc (const size_t sz) {
       void * ptr = NULL;
- //     fprintf(stderr, "SEGHEAP: sz %ld %lx max %lx\n", sz, sz, super::maxObjectSize);
       if (sz <= super::maxObjectSize) {
 	const int sizeClass = ((scFunction) getSizeClass) (sz);
 	const size_t objectSize = ((csFunction) getClassMaxSize) (sizeClass);
@@ -320,12 +390,25 @@ namespace HL {
 	assert (((scFunction) getSizeClass)(objectSize) == sizeClass);
 	assert (sizeClass >= 0);
 	assert (sizeClass < NumBins);
+        
+        if (isSpeculating){
+            addRestoreBin(sizeClass);
+        }
 	ptr = super::myLittleHeap[sizeClass].malloc (objectSize);
-	if (!ptr) {
-	  ptr = super::bigheap.malloc (objectSize);
+        if (!ptr){
+            if (isSpeculating){
+                //cout << "segheap: bigheap allocation " << getpid() << endl;
+                popRestoreBin();
+            }
+            ptr = super::bigheap.malloc (objectSize);
 	}
-      } else {
-	ptr = super::bigheap.malloc (sz);
+      }
+      else if (isSpeculating){
+          //cout << "segheap returning NULL " << getpid() << endl;
+              return NULL;
+      }
+      else{
+          ptr = super::bigheap.malloc (sz);
       }
       return ptr;
     }
@@ -337,7 +420,12 @@ namespace HL {
 	return;
       }
       if (objectSize > super::maxObjectSize) {
-	super::bigheap.free (ptr);
+          if (isSpeculating){
+              //this should almost never happen;
+              cout << "Whoops! large object being freed " << objectSize << " " << super::maxObjectSize << " " << this << " " << &super::maxObjectSize << endl;
+              return;
+          }
+          super::bigheap.free (ptr);
       } else {
 	int objectSizeClass = ((scFunction) getSizeClass) (objectSize);
 	assert (objectSizeClass >= 0);
@@ -353,7 +441,13 @@ namespace HL {
 	}
 
 	super::myLittleHeap[objectSizeClass].free (ptr);
-	super::memoryHeld += objectSize;
+        if (isSpeculating){
+            addRestoreBin(objectSizeClass);
+            //TODO: store up memoryHeld to add later???
+        }
+        else{
+            super::memoryHeld += objectSize;
+        }
       }
     }
 

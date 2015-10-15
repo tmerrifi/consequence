@@ -68,12 +68,33 @@ namespace HL {
       SuperHeap::clear();
     }
 
+      inline void checkpoint(){
+          dict.checkpoint();
+          checkpointed=true;
+      }
+
+      inline void endCheckpoint(){
+          checkpointed=false;
+      }
+
+      void revert(){
+          dict.restore();
+          checkpointed=false;
+      }
+      
+      inline bool isCheckpointed(){
+          return checkpointed;
+      }
+      
+      AdaptHeap(){
+          checkpointed=false;
+      }
 
   private:
-
-    /// The dictionary object.
-    Dictionary dict;
-
+      /// The dictionary object.
+      Dictionary dict;
+      bool checkpointed;
+      
     class Entry : public Dictionary::Entry {};
   };
 

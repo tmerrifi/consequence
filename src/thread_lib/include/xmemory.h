@@ -237,11 +237,13 @@ public:
 
 
     static inline void checkpoint(){
+        //cout << "checkpoint " << getpid() << endl;
         _pheap.checkpoint();
         _globals.checkpoint();
     }
 
     static inline void commit() {
+        //cout << "commit " << getpid() << endl;
         _pheap.checkandcommit();
         _globals.checkandcommit();
     }
@@ -258,6 +260,7 @@ public:
 
 
     static inline void commit_parallel(int heapVersionToWaitFor, int globalsVersionToWaitFor){
+        //cout << "commit " << getpid() << endl;
         _pheap.commit_parallel(heapVersionToWaitFor);
         _globals.commit_parallel(globalsVersionToWaitFor);
     }
@@ -284,19 +287,19 @@ public:
     }
 
     //revert heap and globals
-    static inline void revert_heap_and_globals(){
-      _pheap.revert_heap_and_globals();
-      _globals.revert_heap_and_globals();
+    static void __attribute__ ((noinline)) revert_heap_and_globals(){
+        //cout << "revert " << getpid() << endl;
+        _pheap.revert(_heapid);
+        _pheap.revert_heap_and_globals();
+        _globals.revert_heap_and_globals();
     }
 
     static inline void begin_speculation(){
-        _pheap.begin_speculation();
-        _globals.begin_speculation();
+        _pheap.begin_speculation(_heapid);
     }
 
     static inline void end_speculation(){
-        _pheap.end_speculation();
-        _globals.end_speculation();
+        _pheap.end_speculation(_heapid);
     }
 };
 

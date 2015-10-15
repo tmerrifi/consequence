@@ -274,20 +274,6 @@ public:
         return snap_memory->segment;
     }
 
-    inline void begin_speculation(){
-        //cout << "begin!!! " << getpid() << endl;
-        isSpeculating = true;
-    }
-
-    inline void end_speculation(){
-        //cout << "end!!! " << endl;
-        isSpeculating = false;
-    }
-
-    inline bool is_speculating(){
-        return isSpeculating;
-    }
-    
 private:
 
     bool isSpeculating;

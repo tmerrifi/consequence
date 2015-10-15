@@ -53,6 +53,19 @@ public:
 		Source::free(_heap);
 	}
 
+    void begin_speculation(int heapid){
+        _heap->begin_speculation(heapid);
+    }
+
+    void end_speculation(int heapid){
+        _heap->end_speculation(heapid);
+    }
+
+    void revert(int heapid){
+        _heap->revert(heapid);
+    }
+   
+    
 	void * malloc(int heapid, size_t sz) {
 		return _heap->malloc(heapid, sz);
 	}

@@ -3,12 +3,12 @@ SRC_DIR = source
 
 SRCS = $(SRC_DIR)/checkpoint.cpp $(SRC_DIR)/xrun.cpp $(SRC_DIR)/xthread.cpp $(SRC_DIR)/xmemory.cpp $(SRC_DIR)/prof.cpp $(SRC_DIR)/real.cpp $(SRC_DIR)/libdthread.cpp
 
-DEPS = $(SRCS) $(INC_DIR)/syncstats.h $(INC_DIR)/speculation.h $(INC_DIR)/sync_types.h $(INC_DIR)/xpersist.h $(INC_DIR)/checkpoint.h $(INC_DIR)/xdefines.h $(INC_DIR)/xglobals.h $(INC_DIR)/xpersist.h $(INC_DIR)/xplock.h $(INC_DIR)/xrun.h $(INC_DIR)/xheap.h $(INC_DIR)/warpheap.h $(INC_DIR)/xadaptheap.h $(INC_DIR)/xoneheap.h $(INC_DIR)/determ.h
+DEPS = $(SRCS) $(INC_DIR)/syncstats.h $(INC_DIR)/speculation.h $(INC_DIR)/sync_types.h $(INC_DIR)/xpersist.h $(INC_DIR)/checkpoint.h $(INC_DIR)/xdefines.h $(INC_DIR)/xglobals.h $(INC_DIR)/xpersist.h $(INC_DIR)/xplock.h $(INC_DIR)/xrun.h $(INC_DIR)/xheap.h $(INC_DIR)/warpheap.h $(INC_DIR)/xadaptheap.h $(INC_DIR)/xoneheap.h $(INC_DIR)/determ.h $(INC_DIR)/heaplayers/segheap.h $(INC_DIR)/heaplayers/util/sllist.h $(INC_DIR)/heaplayers/adapt.h $(INC_DIR)/heaplayers/zoneheap.h $(INC_DIR)/xmemory.h
 
 INCLUDE_DIRS = -I$(INC_DIR) -I$(INC_DIR)/heaplayers -I$(INC_DIR)/heaplayers/util
 
 ifeq ($(CONSEQ_TYPE),ICSpec)  
-	CONSEQ_FLAGS = -DFAST_FORWARD -DUSE_DEFERRED_WORK -DSINGLE_THREAD_OPT -DUSE_SPECULATION -DSPEC_USE_TICKS -DEVENT_VIEWER
+	CONSEQ_FLAGS = -DFAST_FORWARD -DUSE_DEFERRED_WORK -DSINGLE_THREAD_OPT -DUSE_SPECULATION -DSPEC_USE_TICKS #-DEVENT_VIEWER
 	BINARY_NAME = libconsequence_IC.so
 endif
 
@@ -22,6 +22,13 @@ ifeq ($(CONSEQ_TYPE),IC)
 	CONSEQ_FLAGS = -DFAST_FORWARD -DUSE_DEFERRED_WORK -DSINGLE_THREAD_OPT -DUSE_TX_COARSENING #-DEVENT_VIEWER  #-DUSE_SPECULATION -DSPEC_USE_TICKS #-DTRACK_LIBRARY_CYCLES #-DEVENT_VIEWER #-DUSE_USERSPACE_READING 
 	BINARY_NAME = libconsequence_IC.so
 endif
+
+
+ifeq ($(CONSEQ_TYPE),RRSpec) 
+	CONSEQ_FLAGS = -DFAST_FORWARD -DSINGLE_THREAD_OPT -DUSE_SPECULATION -DSPEC_USE_TICKS -DTOKEN_ORDER_ROUND_ROBIN #-DEVENT_VIEWER -DDISABLE_PARALLEL_COMMITS -DEVENT_VIEWER
+	BINARY_NAME = libconsequence_IC.so
+endif
+
 
 ifeq ($(CONSEQ_TYPE),ICPlain)
 	CONSEQ_FLAGS = -DFAST_FORWARD -DSINGLE_THREAD_OPT -DUSE_DEFERRED_WORK 
@@ -43,6 +50,8 @@ ifeq ($(arch),32)
 endif
 
 CXX = g++
+
+#-fno-inline-small-functions
 
 CFLAGS32 = -g -march=core2 -mtune=core2 -msse3 $(LIB_ARCH) -DSSE_SUPPORT -O3 -shared -fPIC -D'CUSTOM_PREFIX(x)=grace\#\#x' $(CONSEQ_FLAGS) 
 

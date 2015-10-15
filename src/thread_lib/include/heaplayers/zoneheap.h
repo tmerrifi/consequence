@@ -14,7 +14,10 @@
 #ifndef _ZONEHEAP_H_
 #define _ZONEHEAP_H_
 
+#include <iostream>
+
 #include <assert.h>
+
 
 namespace HL {
 
@@ -54,7 +57,30 @@ namespace HL {
     /// Remove in a zone allocator is a no-op.
     inline int remove (void *) { return 0; }
 
+      void begin_speculation(){
+          isSpeculating=true;
+          if (_currentArena){
+              _currentArena->checkpoint();
+          }
+          //cout << "zoneheap: begin_speculation" << endl;
+      }
 
+      void end_speculation(){
+          isSpeculating=false;
+          //cout << "zoneheap: end_speculation " << isSpeculating << endl; 
+      }
+
+      void revert_speculation(){
+          //cout << "zoneheap: revert_speculation1 " << isSpeculating << endl; 
+          if (_currentArena){
+              _currentArena->restore();
+          }
+          isSpeculating=false;
+          //cout << "zoneheap: revert_speculation2 " << isSpeculating << endl; 
+      }
+
+
+      
   private:
 
     inline static size_t align (size_t sz) {
@@ -64,9 +90,19 @@ namespace HL {
     inline void * zoneMalloc (size_t sz) {
       // Round up size to an aligned value.
       sz = align (sz);
+
+      if (_currentArena==NULL && isSpeculating){
+          //cout << "zoneheap: abort because _currentArena is NULL" << endl;
+          return NULL;
+      }
+      
       if (_currentArena && (_currentArena->sizeRemaining() >= sz)) {
 	void * ptr = _currentArena->malloc(sz);
 	return ptr;
+      }
+      else if (isSpeculating){
+          //cout << "zoneheap: slowMalloc abort" << endl;
+          return NULL;
       }
       return slowMalloc (sz);
     }
@@ -100,7 +136,8 @@ namespace HL {
       return ptr;
     }
 
-  
+
+      
     class Arena {
     public:
       Arena (size_t sz)
@@ -118,18 +155,36 @@ namespace HL {
 	_arenaSpace += sz;
 	return ptr;
       }
+
+        inline void checkpoint(){
+            _remaining_backup=_remaining;
+            _arenaSpace_backup=_arenaSpace;
+            //cout << "zoneheap: checkpoint " << _remaining_backup << " " << _arenaSpace_backup << endl;
+        }
+
+        inline void restore(){
+            _remaining=_remaining_backup;
+            _arenaSpace=_arenaSpace_backup;
+            //cout << "zoneheap: checkpoint " << _remaining << " " << _arenaSpace << endl;
+        }
+        
       size_t  sizeRemaining (void) const { return _remaining; }
       void    setNextArena (Arena * n) { _nextArena = n; }
       Arena * getNextArena (void) const { return _nextArena; }
 
     private:
-      size_t _remaining;
+        size_t _remaining;
+        size_t _remaining_backup;
       Arena * _nextArena;
      // union {
 	char * _arenaSpace;
+        char * _arenaSpace_backup;
 	//double _dummy; // For alignment.
   //    };
       size_t _dummy;
+
+
+        //
     };
     
     /// The current arena.
@@ -137,6 +192,9 @@ namespace HL {
 
     /// A linked list of past arenas.
     Arena * _pastArenas;
+
+      bool isSpeculating;
+      
   };
 
 }
