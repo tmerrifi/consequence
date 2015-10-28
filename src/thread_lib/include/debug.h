@@ -28,10 +28,35 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include <execinfo.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 #ifdef DEBUG
     #define DEBUG(...) fprintf(stderr, "%20s:%-4d: ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n")
 #else
     #define DEBUG(_fmt, ...)
 #endif
+
+#define __CONSEQ_DEBUG_STACK_SIZE 100
+
+inline void __conseq_dump_stack(){
+    void *buffer[__CONSEQ_DEBUG_STACK_SIZE];
+    char **strings;
+    
+    int nptrs = backtrace(buffer, __CONSEQ_DEBUG_STACK_SIZE);
+    
+    strings = backtrace_symbols(buffer, nptrs);
+    if (strings == NULL) {
+        perror("backtrace_symbols");
+        exit(EXIT_FAILURE);
+    }
+    
+    for (int j = 0; j < nptrs; j++)
+        printf("%s\n", strings[j]);
+    
+    free(strings);
+}
 
 #endif
