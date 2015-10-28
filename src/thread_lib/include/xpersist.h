@@ -233,10 +233,19 @@ public:
     }
     
     inline void commit_parallel(int versionToWaitFor){
-        while(conv_get_linearized_version_num(snap_memory)<versionToWaitFor){
-            Pause();
+        if (get_dirty_pages() > 0){
+            while(conv_get_linearized_version_num(snap_memory)<versionToWaitFor){
+                Pause();
+            }
         }
-        conv_commit_and_update(snap_memory);
+        else{
+            //we need to hold off here until its completely committed
+            while(conv_get_committed_version_num(snap_memory)<versionToWaitFor){
+                Pause();
+            }
+        }
+
+        conv_commit_and_update(snap_memory);        
     }
 
     /// @brief Commit all writes.
