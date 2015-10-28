@@ -1116,7 +1116,6 @@ public:
       //*************END DEBUG CODE*********************
       //token gets released inside cond_wait()...lets make sure we make that here
       _token_holding=false;
-      commitAndUpdateMemory();
       __mutex_lock_inner((pthread_mutex_t *)lock, false /*allow coarsening/*/);
 #ifdef USE_TAGGING
         xmemory::set_local_version_tag(0);
