@@ -1310,7 +1310,6 @@ public:
       BarrierEntry * barr = (BarrierEntry *)getSyncEntry(b);
       getToken(threadindex);
       start_thread_event(threadindex, DEBUG_TYPE_COMMIT, b);
-      //commitAndUpdateMemory(threadindex,NULL);
       commitInSerial(threadindex,NULL);
       end_thread_event(threadindex, DEBUG_TYPE_COMMIT);
       start_thread_event(threadindex, DEBUG_TYPE_BARRIER_WAIT, b);
@@ -1388,72 +1387,56 @@ public:
       }
   }
 
-  void barrier_wait(void * b, int threadindex) {
-
-      assert(false);
-      
+  void barrier_wait(void * b, int _thread_index){
       BarrierEntry * barr = (BarrierEntry *)getSyncEntry(b);
-      //we are committing in parallel, but may need to wait for previous versions to 
-      //finish committing...these variables will track which version to wait for.
-      unsigned long heapVersion, globalsVersion, ourHeapVersion, ourGlobalsVersion;
+      //which version do we need to wait for????
+      unsigned long heapVersionToWaitFor, globalsVersionToWaitFor;
+      //our version numbers for heap and globals
+      unsigned long ourHeapVersion, ourGlobalsVersion;
       //get the token
-      getToken(threadindex);
+      getToken(_thread_index);
       fflush(stdout);
       //increment the counter to mark our arrival
       barr->counter++;
-      //what versions will we be waiting for when we perform the commit?
-      if (barr->counter==1){
-          //first thread through sets the base version numbers to be equal to their version
-          heapVersion=barr->heapVersion=xmemory::get_current_heap_version();
-          globalsVersion=barr->globalsVersion=xmemory::get_current_globals_version();
-      }
-      else{
-          heapVersion=barr->heapVersion;
-          globalsVersion=barr->globalsVersion;
-      }
-
-      barr->total_dirty+=xmemory::get_dirty_pages();
-
-      //figure out our version to wait for heap and globals.
-      //Only add one if we are going to create a new version on this segment
-      barr->heapVersion+=(xmemory::get_dirty_pages_heap()>0) ? 1 : 0;
-      ourHeapVersion=barr->heapVersion;
-      barr->globalsVersion+=(xmemory::get_dirty_pages_globals()>0) ? 1 : 0;
-      ourGlobalsVersion=barr->globalsVersion;
-      //all threads except for the last one to arrive need to remove themselves from contention
-      //for the token, and release the lock
+      commitAndUpdateMemoryParallelBegin(_thread_index, NULL, &heapVersionToWaitFor, &globalsVersionToWaitFor);
+      //everyone needs to remove themselves from contention and pass the token to the next thread
       if(barr->counter!=barr->maxthreads){
           determ_task_clock_halt();
-          putToken(threadindex);
+          putToken(_thread_index);
       }
-      //perform the commit, in parallel, with all your friends!!!
-      start_thread_event(threadindex, DEBUG_TYPE_COMMIT, b);
-      //just count dirty pages for now
-      add_event_commit_stats(threadindex, xmemory::get_updated_pages(), xmemory::get_merged_pages(), 0, xmemory::get_dirty_pages());
-      xmemory::commit_parallel(heapVersion, globalsVersion);
+      //get *our* heap and globals version numbers
+      ourHeapVersion=heapVersionToWaitFor+(xmemory::get_dirty_pages_heap() > 0) ? 1 : 0;
+      ourGlobalsVersion=globalsVersionToWaitFor+(xmemory::get_dirty_pages_globals() > 0) ? 1 : 0;
+      
+      //we use the total dirty to get an idea of how much optimistic updating to do
+      barr->total_dirty+=xmemory::get_dirty_pages();
+      //now commit everything
+      commitAndUpdateMemoryParallelEnd(_thread_index, NULL, heapVersionToWaitFor, globalsVersionToWaitFor);
+      //we're not holding a lock so we have to increment with an atomic
       xatomic::increment(&barr->committed);
-      end_thread_event(threadindex, DEBUG_TYPE_COMMIT);
-      start_thread_event(threadindex, DEBUG_TYPE_BARRIER_WAIT, b);
+      start_thread_event(_thread_index, DEBUG_TYPE_BARRIER_WAIT, b);
+      //do optimistic (and informed) updates while waiting
       __wait_for_commiters(barr,ourHeapVersion, ourGlobalsVersion);
-      //wait for all our friends to finish their commit
+      //lets arrive at a real barrier
       WRAP(pthread_barrier_wait)(&barr->real_barr);
-      end_thread_event(threadindex, DEBUG_TYPE_BARRIER_WAIT);
+      end_thread_event(_thread_index, DEBUG_TYPE_BARRIER_WAIT);
+      
       //add yourself back...one of us holds the token so nothing can go wrong
-      if (!isTokenHolder(threadindex)){
+      if (!isTokenHolder(_thread_index)){
           determ_task_clock_activate();
       }
       //if it got to the point where there was only a single active thread...just clear that flag
       determ_task_clock_clear_single_active_thread();
-      start_thread_event(threadindex, DEBUG_TYPE_COMMIT, b);
+      start_thread_event(_thread_index, DEBUG_TYPE_COMMIT, b);
       //everyone has committed...but earlier threads still need to update to see the newer stuff
       xmemory::update();
-      end_thread_event(threadindex, DEBUG_TYPE_COMMIT);
-      start_thread_event(threadindex, DEBUG_TYPE_BARRIER_WAIT, b);
+      end_thread_event(_thread_index, DEBUG_TYPE_COMMIT);
+      start_thread_event(_thread_index, DEBUG_TYPE_BARRIER_WAIT, b);
       //wait for the update to finish
       WRAP(pthread_barrier_wait)(&barr->real_barr);
-      end_thread_event(threadindex, DEBUG_TYPE_BARRIER_WAIT);
+      end_thread_event(_thread_index, DEBUG_TYPE_BARRIER_WAIT);
       //everyone is done, the token holder just needs to clean up
-      if(isTokenHolder(threadindex)){
+      if(isTokenHolder(_thread_index)){
           barr->counter=0;
           barr->heapVersion=0;
           barr->globalsVersion=0;
@@ -1461,10 +1444,10 @@ public:
           barr->total_dirty=0;
           //we activated a bunch of guys...we need to do this
           _activation_counter++;
-          putToken(threadindex);
+          putToken(_thread_index);
       }
   }
-
+  
 #endif
 
   void barrier_destroy(void * bar) {assert(false);}

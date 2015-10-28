@@ -1061,7 +1061,7 @@ public:
 
   // Add the barrier support.
   static int barrier_wait(pthread_barrier_t *barrier) {
-      stopClock();
+      stopClockForceEnd();
 #ifdef USE_TAGGING
       xmemory::set_local_version_tag((unsigned int)barrier);
 #endif
