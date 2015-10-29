@@ -54,7 +54,6 @@ void * child_thread(void * data)
         pthread_mutex_lock(&g_lock);
         /* Do 1ms computation work. */
         ++counter;
-        printf("*********** child_thread CS ******* %d i = %d\n", getpid(), i);
         /* Page access */
         pthread_mutex_unlock(&g_lock);
     }
