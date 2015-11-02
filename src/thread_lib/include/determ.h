@@ -1171,7 +1171,7 @@ public:
       return entry;
   }
 
-  void cond_destroy(void * cond) {assert(false);}
+  void cond_destroy(void * cond) {}
 
   void cond_wait(int threadindex, void * user_cond, void * thelock) {
       //get the thread entry

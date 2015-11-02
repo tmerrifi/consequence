@@ -287,8 +287,7 @@ int pthread_cond_wait(pthread_cond_t * cond, pthread_mutex_t * mutex) {
 }
 
 int pthread_cond_destroy(pthread_cond_t * cond) {
-    cout << "ERROR: pthread_cond_destroy NOT IMPLEMENTED" << endl;
-     assert(0);
+    xrun::cond_destroy(cond);
 }
 
 // Add support for barrier functions
