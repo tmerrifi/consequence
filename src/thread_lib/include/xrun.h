@@ -474,11 +474,6 @@ public:
     
     /* Heap-related functions. */
   static inline void * malloc(size_t sz) {
-      if (!_speculation->isSpeculating()){
-          stopClockForceEnd();
-          waitToken();
-          commitAndUpdateMemoryTerminateSpeculation();
-      }
       void * ptr = conseq_malloc::malloc(sz);
       if (ptr==NULL && _speculation->isSpeculating()){
           //we would get here if the thread-local heap tried to allocate from the shared heap
@@ -490,31 +485,21 @@ public:
               cout << "whoops we are having an issue with malloc on speculation!!!!! " << endl;
               exit(-1);
           }
+          startClock();
       }
-      if (_speculation->isSpeculating()){
-          //cout << "m: " << ptr << " " << getpid() << endl;
-      }
-      startClock();
       return ptr;
   }
   static inline void * calloc(size_t nmemb, size_t sz) {
       return conseq_malloc::calloc(nmemb, sz);
   }
   static inline void free(void * ptr) {
-      if (!_speculation->isSpeculating()){
-          stopClockForceEnd();
-          waitToken();       
-          commitAndUpdateMemoryTerminateSpeculation();
-      }
-      else{
-          //cout << "free " << getpid() << endl;
-      }
       conseq_malloc::free(ptr);
-      startClock();
   }
-  static inline size_t getSize(void * ptr) {
-      return conseq_malloc::getSize(ptr);
-  }
+
+    static inline size_t getSize(void * ptr) {
+        return conseq_malloc::getSize(ptr);
+    }
+    
   static inline void * realloc(void * ptr, size_t sz) {
       stopClockForceEnd();
       waitToken();
