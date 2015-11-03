@@ -101,6 +101,8 @@ private:
 
     static uint64_t _last_token_release_time;
 
+    static int characterize_lock_count, characterize_barrier_wait;
+    
 public:
 
   /// @brief Initialize the system.
@@ -121,6 +123,8 @@ public:
     tx_consecutively_coarsened=0;
     heapVersionToWaitFor=0;
     globalsVersionToWaitFor=0;
+    characterize_lock_count=0;
+    characterize_barrier_wait=0;
     tx_current_coarsening_level=LOGICAL_CLOCK_MIN_ALLOWABLE_TX_SIZE;
     tx_monitor_next=false;
     
@@ -320,7 +324,7 @@ public:
       else{
           ThreadPool::getInstance().add_thread_to_pool_by_id(_thread_index);
       }
-      cout << "reverts: " << reverts << " locks_elided: " << locks_elided << endl;
+      cout << "reverts: " << reverts << " locks_elided: " << locks_elided << " total lock count: " << characterize_lock_count << endl;
       xmemory::sleep();
       //the token is released in here....
       determ::getInstance().deregisterThread(_thread_index);
@@ -442,7 +446,7 @@ public:
     commitAndUpdateMemory();
 
     //#ifdef PRINT_SCHEDULE
-    //cout << "SCHED: FINISHED JOIN - tid: " << _thread_index << " target " << child_threadindex << endl;
+    cout << "SCHED: FINISHED JOIN - tid: " << _thread_index << " target " << child_threadindex << endl;
     fflush(stdout);
     //#endif
 
@@ -872,6 +876,7 @@ public:
 
     static void mutex_lock(pthread_mutex_t * mutex) {
         timespec t1,t2;
+        characterize_lock_count++;
         bool isSpeculating = _speculation->isSpeculating();
         stopClock();
 
