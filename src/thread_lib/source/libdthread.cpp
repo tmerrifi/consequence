@@ -124,8 +124,24 @@ void free(void * ptr) {
 }
 
 void * memalign(size_t boundary, size_t size) {
-	DEBUG("memalign is not supported");
-	return NULL;
+    size_t counter, boundary_tmp;
+    //ensure boundary is a power of 2
+    for (counter=0, boundary_tmp=boundary; boundary_tmp; counter++){
+        boundary_tmp&=(boundary_tmp - 1);
+    }
+    if (counter==1){
+        //we don't actually have time to support memalign for real, so instead
+        //we are going to allocate the requested size plus some extra space to
+        //move over if needed
+        size_t ptr = (size_t)malloc(size + (boundary * 2));
+        //do we have work to do?
+        if (ptr & (boundary-1)){
+            ptr=(ptr & (~(boundary-1))) + boundary;
+        }
+        return (void *)ptr;
+    }
+    
+    return NULL;
 }
 
 size_t malloc_usable_size(void * ptr) {
@@ -283,7 +299,7 @@ int pthread_cond_signal(pthread_cond_t * cond) {
 }
 
 int pthread_cond_wait(pthread_cond_t * cond, pthread_mutex_t * mutex) {
-    xrun::cond_wait(cond,mutex);
+    return xrun::cond_wait(cond,mutex);
 }
 
 int pthread_cond_destroy(pthread_cond_t * cond) {
