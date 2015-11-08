@@ -327,7 +327,7 @@ public:
       else{
           ThreadPool::getInstance().add_thread_to_pool_by_id(_thread_index);
       }
-      cout << "reverts: " << reverts << " locks_elided: " << locks_elided << " total lock count: " << characterize_lock_count << endl;
+      //cout << "reverts: " << reverts << " locks_elided: " << locks_elided << " total lock count: " << characterize_lock_count << endl;
       xmemory::sleep();
       //the token is released in here....
       determ::getInstance().deregisterThread(_thread_index);
