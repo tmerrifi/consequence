@@ -587,8 +587,8 @@ public:
 
   inline void commitInSerial(int tid, struct local_copy_stats * stats){
       fflush(stdout);
-      if (!isTokenHolder(tid)){
-          cout << "error: need to hold the token when committing" << endl;
+      if (!isTokenHolder(tid) && !singleActiveThread(tid)){
+          cout << "error: need to hold the token when committing" << " " << getpid() << endl;
           exit(-1);
       }
       uint32_t dirty_pages=xmemory::get_dirty_pages();
@@ -834,6 +834,15 @@ public:
 
 
   }
+
+  bool singleActiveThread(int threadindex){
+#ifdef SINGLE_THREAD_OPT        
+      return (determ_task_clock_single_active_thread() && (threadindex==getLastTokenHolder()));
+#else
+      return false;
+#endif
+    }
+
 
   int getLastTokenPutter(){
       return _last_putter;

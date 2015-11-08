@@ -170,11 +170,14 @@ public:
   }
 
     static bool singleActiveThread(void){
-#ifdef SINGLE_THREAD_OPT        
-        return (determ_task_clock_single_active_thread() && (_thread_index==determ::getInstance().getLastTokenHolder()));
-#else
-        return false;
-#endif
+
+        return determ::getInstance().singleActiveThread(_thread_index);
+        
+        //#ifdef SINGLE_THREAD_OPT        
+        //        return (determ_task_clock_single_active_thread() && (_thread_index==determ::getInstance().getLastTokenHolder()));
+        //#else
+        //        return false;
+        //#endif
     }
 
     static inline bool inCoarsenedTx(){
