@@ -58,7 +58,6 @@ void * checkpoint::find_stack_top(void){
 
 
 	checkpoint::checkpoint(){
-            cout << "checkpoint constructor" << endl;
             failed = false;
             is_speculating = false;
             stack_start = (size_t) find_stack_top();
