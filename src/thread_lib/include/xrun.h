@@ -1068,9 +1068,10 @@ public:
       xmemory::set_local_version_tag(0);
 #endif
       startClock();
+      return 0;
   }
   
-  static void cond_wait(void * cond, void * lock) {
+  static int cond_wait(void * cond, void * lock) {
       stopClockForceEnd();
       bool acquiringToken=(!_token_holding);
       //**************DEBUG CODE**************
@@ -1114,6 +1115,7 @@ public:
         xmemory::set_local_version_tag(0);
 #endif
       startClock();
+      return 0;
   }
   
 
