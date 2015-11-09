@@ -1085,6 +1085,12 @@ public:
       if (acquiringToken){
           waitToken();
       }
+      //from the perspective of the speculation engine, we need to remove this lock from the
+      //set of active locks. If we don't, it will prevent us from successfully committing our tx
+      if (_speculation->isSpeculating()){
+          _speculation->endSpeculativeEntry(lock);
+      }
+          
       commitAndUpdateMemoryTerminateSpeculation();
       
       //TODO: We need a better solution for this...this is embarassing :)
