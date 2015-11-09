@@ -640,8 +640,8 @@ public:
 
   inline void commitAndUpdateMemoryParallelBegin(int tid, struct local_copy_stats * stats, uint64_t * heap_version_to_wait_for, uint64_t * globals_version_to_wait_for){
       fflush(stdout);
-      if (!isTokenHolder(tid)){
-          cout << "error: need to hold the token when committing" << endl;
+      if (!isTokenHolder(tid) && !singleActiveThread(tid)){
+          cout << "error: need to hold the token when committing " << endl;
           exit(-1);
       }
       start_thread_event(tid, DEBUG_TYPE_COMMIT, NULL);
