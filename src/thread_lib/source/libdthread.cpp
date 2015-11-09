@@ -243,6 +243,26 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex) {
 	return 0;
 }
 
+int pthread_spin_init(pthread_spinlock_t *lock, int pshared){
+    pthread_mutex_init((pthread_mutex_t *)lock, NULL);
+    return 0;
+}
+
+int pthread_spin_lock(pthread_spinlock_t *lock){
+    pthread_mutex_lock((pthread_mutex_t *)lock);
+    return 0;
+}
+
+int pthread_spin_unlock(pthread_spinlock_t *lock){
+    pthread_mutex_unlock((pthread_mutex_t *)lock);
+    return 0;
+}
+
+int pthread_spin_destroy(pthread_spinlock_t *lock){
+    //for now just return
+    return 0;
+}
+    
 int pthread_mutex_destory(pthread_mutex_t *mutex) {
 	if(initialized) {
 		return xrun::mutex_destroy(mutex);
@@ -271,6 +291,9 @@ int pthread_attr_setstacksize(pthread_attr_t *, size_t) {
 	return 0;
 }
 
+
+
+    
 int pthread_create (pthread_t * tid, const pthread_attr_t * attr, void *(*fn) (void *), void * arg) {
     if(initialized) {
         xrun::spawn(fn, arg, tid);
