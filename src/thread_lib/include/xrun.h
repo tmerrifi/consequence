@@ -508,11 +508,24 @@ public:
     }
     
   static inline void * realloc(void * ptr, size_t sz) {
-      stopClockForceEnd();
-      waitToken();
-      commitAndUpdateMemoryTerminateSpeculation();
-      return conseq_malloc::realloc(ptr,sz);
-      startClock();
+
+      void * newptr = conseq_malloc::realloc(ptr, sz);
+      if (ptr==NULL && _speculation->isSpeculating()){
+          //we would get here if the thread-local heap tried to allocate from the shared heap
+          stopClockForceEnd();
+          waitToken();
+          commitAndUpdateMemoryTerminateSpeculation();
+          newptr = conseq_malloc::realloc(ptr, sz);
+          if (ptr==NULL){
+              cout << "whoops we are having an issue with realloc on speculation!!!!! " << endl;
+              exit(-1);
+          }
+          startClock();
+      }
+
+      cout << "returning... " << newptr;
+      
+      return newptr;
   }
 
 
