@@ -327,7 +327,7 @@ public:
       else{
           ThreadPool::getInstance().add_thread_to_pool_by_id(_thread_index);
       }
-      //cout << "reverts: " << reverts << " locks_elided: " << locks_elided << " total lock count: " << characterize_lock_count << endl;
+      cout << "reverts: " << reverts << " locks_elided: " << locks_elided << " total lock count: " << characterize_lock_count << " " << getpid() << endl;
       xmemory::sleep();
       //the token is released in here....
       determ::getInstance().deregisterThread(_thread_index);
@@ -741,9 +741,9 @@ public:
             //Here we begin or continue speculation...in the event that a speculation is reverted we will
             //return false and continue on
 #ifdef NO_DETERM_SYNC
-            if (_speculation->speculate(mutex,get_ticks_for_speculation())==true){
+            if (_speculation->speculate(mutex,get_ticks_for_speculation(), speculation::SPEC_ENTRY_LOCK)==true){
 #else
-            if (_speculation->speculate(mutex,_last_token_release_time)==true){
+                if (_speculation->speculate(mutex,_last_token_release_time, speculation::SPEC_ENTRY_LOCK)==true){
 #endif
                 if (!isSpeculating){
                     //HERE we know that we are beginning a speculation
@@ -1152,8 +1152,25 @@ public:
   }
 
   static void cond_signal(void * cond) {
-      stopClockForceEnd();
+      int shouldSpecResult;
 
+#ifdef PRINT_SCHEDULE
+      cout << "SCHED: COND SIGNAL - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(cond) << endl;
+      fflush(stdout);
+#endif
+
+      
+      stopClock();
+      if (_speculation->isSpeculating()){
+          //should we continue speculating??
+          if (_speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult)){
+              //ready to add our entry
+              _speculation->speculate(cond, _last_token_release_time, speculation::SPEC_ENTRY_SIGNAL);
+              return;
+          }
+      }
+
+      stopClockForceEnd();
       //if we are in a coarse tx, we're about to signal another thread...so reset it
       resetTXCoarsening();
       //if we don't already own the token, we need to commit. 

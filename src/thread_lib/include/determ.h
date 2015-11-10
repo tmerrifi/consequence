@@ -1212,12 +1212,7 @@ public:
       determ_task_clock_on_wakeup();
   }
 
-  // Current thread are going to send out signal.
-  void cond_signal(int threadindex, void * user_cond) {
-      //get the thread entry
-      ThreadEntry * entry = &_entries[threadindex];
-      //get the cond entry
-      CondEntry * condentry = (CondEntry*)getSyncEntry(user_cond);
+  void cond_signal_inner(CondEntry * condentry){
       assert(condentry->waiters>=0);
       //we have the token, so its safe to check if there are any waiters
       if (condentry->waiters==0){
@@ -1239,7 +1234,13 @@ public:
       //we have to wake everyone up...since there's no way to target just the thread that has been chosen
       int result=WRAP(pthread_cond_broadcast)(&condentry->realcond);
       unlock();
-
+  }
+  
+  // Current thread are going to send out signal.
+  void cond_signal(int threadindex, void * user_cond) {
+      //get the cond entry
+      CondEntry * condentry = (CondEntry*)getSyncEntry(user_cond);
+      return cond_signal_inner(condentry);
   }
 
   void cond_broadcast(int threadindex, void * user_cond) {

@@ -8,6 +8,10 @@
 
 #include "conseq_malloc.h"
 
+#include "determ.h"
+
+#include "debug.h"
+
 #include <determ_clock.h>
 
 #ifdef TOKEN_ORDER_ROUND_ROBIN
@@ -75,15 +79,22 @@
 #endif
 
 class speculation{
+
+ public:
+    typedef enum {SPEC_ENTRY_LOCK, SPEC_ENTRY_SIGNAL} speculation_entry_type;
     
  private:
+    
     class speculation_entry{
     public:
         SyncVarEntry * entry;
         uint64_t acquisition_logical_time;
+        speculation_entry_type type;
     };
 
     speculation_entry entries[SPECULATION_ENTRIES_MAX_ALLOCATED];
+    
+    
     uint32_t entries_count;
     uint32_t active_speculative_entries;
     uint64_t logical_clock_start;
@@ -95,6 +106,7 @@ class speculation{
     uint64_t seq_num;
     uint8_t state;
     bool learning_phase;
+    bool buffered_signal;
     uint32_t learning_phase_count;
     
      bool verify_synchronization(){
@@ -109,7 +121,8 @@ class speculation{
     }
     
  public:
-    speculation(){
+     
+     speculation(){
         for (int i=0;i<SPECULATION_ENTRIES_MAX_ALLOCATED;++i){
             entries[i].entry=NULL;
         }
@@ -119,6 +132,7 @@ class speculation{
         max_entries=SPECULATION_ENTRIES_MAX;
         max_ticks=SPECULATION_MAX_TICKS;
         state=SPEC_STATE_SUCCESS_ONE;
+        buffered_signal=false;
         seq_num=0;
 #ifdef SPEC_DISABLE_ADAPTATION
         learning_phase=false;  
@@ -183,11 +197,16 @@ class speculation{
             }
             *result=2;
             //cout << "0: " << entries_count << endl;
-            //we have to keep going here...otherwise if we stop speculating we'll need to actually acquire the lock
+            //we have to keep going here...since we're still "holding" a lock. 
             return true;
         }
         else if (getSyncEntry(entry_ptr)==NULL){
             *result=3;
+            return false;
+        }
+        //lets kill it if we are buffering a signal. Don't want to delay other threads due to speculation
+        else if (buffered_signal==true){
+            *result=15;
             return false;
         }
 #ifdef SPEC_USE_TICKS
@@ -241,7 +260,7 @@ class speculation{
 #endif
     }
     
-     bool speculate(void * entry_ptr, uint64_t logical_clock){
+     bool speculate(void * entry_ptr, uint64_t logical_clock, speculation_entry_type type){
         if (entries_count>=SPECULATION_ENTRIES_MAX_ALLOCATED){
             cout << "Too many speculative entries " << endl;
             exit(-1);
@@ -251,10 +270,17 @@ class speculation{
             cout << "SyncVarEntry is null " << endl;
             exit(-1);
         }
+        if (type == SPEC_ENTRY_SIGNAL){
+            buffered_signal=true;
+        }
+        else if (type == SPEC_ENTRY_LOCK) {
+            active_speculative_entries++;
+        }
+        
         entries[entries_count].entry=entry;
+        entries[entries_count].type=type;
         entries[entries_count].acquisition_logical_time=logical_clock;
         entries_count++;
-        active_speculative_entries++;
         //cout << "adding " << entry_ptr << " " << active_speculative_entries << endl;
         if (!_checkpoint.is_speculating){
             logical_clock_start=logical_clock;
@@ -277,11 +303,16 @@ class speculation{
             return 0;
         }
         else if (!verify_synchronization() || active_speculative_entries > 0){
+            //            if (active_speculative_entries==2){
+                //__conseq_dump_stack();
+                //cout << "revert: " << active_speculative_entries << " " << getpid() << endl;
+            //}
             adaptSpeculation(false);
             entries_count=0;
             ticks=0;
             start_ticks=0;
             active_speculative_entries=0;
+            buffered_signal=false;
             //cout << "revert!!! " << getpid() << endl;
             //do what we need to do
             _checkpoint.checkpoint_revert();
@@ -301,10 +332,17 @@ class speculation{
 
          for (int i=0;i<entries_count;i++){
              SyncVarEntry * entry = entries[i].entry;
-             entry->last_committed=logical_clock;
+             if (entries[i].type == SPEC_ENTRY_LOCK){
+                 entry->last_committed=logical_clock;
+             }
+             else{
+                 //send the signal we buffered
+                 determ::getInstance().cond_signal_inner((CondEntry *)entry);
+             }
          }
 
          entries_count=0;
+         buffered_signal=false;
          _checkpoint.is_speculating=false;
          ticks=0;
          seq_num++;
@@ -325,6 +363,10 @@ class speculation{
         }
      }
 
+     int getActiveEntriesCount(){
+         return active_speculative_entries;
+     }
+     
      int getEntriesCount(){
          return entries_count;
      }
