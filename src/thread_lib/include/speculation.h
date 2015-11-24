@@ -81,7 +81,7 @@
 class speculation{
 
  public:
-    typedef enum {SPEC_ENTRY_LOCK, SPEC_ENTRY_SIGNAL} speculation_entry_type;
+    typedef enum {SPEC_ENTRY_LOCK, SPEC_ENTRY_SIGNAL, SPEC_ENTRY_BROADCAST} speculation_entry_type;
     
  private:
     
@@ -270,7 +270,7 @@ class speculation{
             cout << "SyncVarEntry is null " << endl;
             exit(-1);
         }
-        if (type == SPEC_ENTRY_SIGNAL){
+        if (type == SPEC_ENTRY_SIGNAL || type == SPEC_ENTRY_BROADCAST){
             buffered_signal=true;
         }
         else if (type == SPEC_ENTRY_LOCK) {
@@ -335,9 +335,13 @@ class speculation{
              if (entries[i].type == SPEC_ENTRY_LOCK){
                  entry->last_committed=logical_clock;
              }
-             else{
+             else if (entries[i].type == SPEC_ENTRY_SIGNAL) {
                  //send the signal we buffered
                  determ::getInstance().cond_signal_inner((CondEntry *)entry);
+             }
+             else if (entries[i].type == SPEC_ENTRY_BROADCAST) {
+                 //send the signal we buffered
+                 determ::getInstance().cond_broadcast_inner((CondEntry *)entry);
              }
          }
 

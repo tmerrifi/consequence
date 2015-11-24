@@ -327,7 +327,7 @@ public:
       else{
           ThreadPool::getInstance().add_thread_to_pool_by_id(_thread_index);
       }
-      cout << "reverts: " << reverts << " locks_elided: " << locks_elided << " total lock count: " << characterize_lock_count << " " << getpid() << endl;
+      cout << "reverts: " << reverts << " sync ops elided: " << locks_elided << " total lock count: " << characterize_lock_count << " " << getpid() << endl;
       xmemory::sleep();
       //the token is released in here....
       determ::getInstance().deregisterThread(_thread_index);
@@ -1137,6 +1137,18 @@ public:
   
 
   static void cond_broadcast(void * cond) {
+      int shouldSpecResult;
+      
+      stopClock();
+      if (_speculation->isSpeculating()){
+          //should we continue speculating??
+          if (_speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult)){
+              //ready to add our entry
+              _speculation->speculate(cond, _last_token_release_time, speculation::SPEC_ENTRY_BROADCAST);
+              return;
+          }
+      }
+
       stopClockForceEnd();
       //if we are in a coarse tx, we're about to signal another thread...so reset it
       resetTXCoarsening();

@@ -1243,11 +1243,7 @@ public:
       return cond_signal_inner(condentry);
   }
 
-  void cond_broadcast(int threadindex, void * user_cond) {
-      //get the thread entry
-      ThreadEntry * entry = &_entries[threadindex];
-      //get the cond entry
-      CondEntry * condentry = (CondEntry*)getSyncEntry(user_cond);
+  void cond_broadcast_inner(CondEntry * condentry){
       assert(condentry->waiters>=0);
       //we have the token, so its safe to check if there are any waiters
       if (condentry->waiters==0){
@@ -1269,7 +1265,12 @@ public:
       //we have to wake everyone up...since there's no way to target just the thread that has been chosen
       int result=WRAP(pthread_cond_broadcast)(&condentry->realcond);
       unlock();
-
+  }
+  
+  void cond_broadcast(int threadindex, void * user_cond) {
+      //get the cond entry
+      CondEntry * condentry = (CondEntry*)getSyncEntry(user_cond);
+      cond_broadcast_inner(condentry);
   }
     
   int sig_wait(const sigset_t *set, int *sig, int threadindex) {assert(false);}
