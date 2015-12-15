@@ -300,11 +300,8 @@ namespace HL {
 
       void addRestoreBin(int bin){
           if (!super::myLittleHeap[bin].isCheckpointed()){
-              //cout << "segheap: addRestoreBin " << bin << endl;
               binsToRestore[binsToRestoreCount++]=bin;
-          }
-          else{
-              //cout << "segheap: addRestoreBin alreadychecked " << bin << endl;
+              super::myLittleHeap[bin].checkpoint();
           }
       }
 
@@ -321,11 +318,9 @@ namespace HL {
       void __attribute__ ((noinline)) restoreBins(bool revert){
           for (int i=0;i<binsToRestoreCount;i++){
               if (revert){
-                  //cout << "segheap: revert " << binsToRestore[i] << endl;
                   super::myLittleHeap[binsToRestore[i]].revert();
               }
               else{
-                  //cout << "segheap: end " << binsToRestore[i] << endl;
                   super::myLittleHeap[binsToRestore[i]].endCheckpoint();
               }
           }
@@ -335,11 +330,9 @@ namespace HL {
   public:
 
       inline StrictSegHeap (void) : isSpeculating(false) {
-
       }
       
       void begin_speculation(){
-          //cout << "segheap: begin_speculation" << " " << this << " " << getpid() << endl;
           //clear the bins to Restore
           binsToRestoreCount=0;
           isSpeculating=true;
@@ -347,17 +340,17 @@ namespace HL {
       }
 
       void revert_speculation(){
-          //cout << "segheap: revert_speculation" << " " << this << " " << getpid() << endl;
           restoreBins(true);
           isSpeculating=false;
           super::bigheap.revert_speculation();
+
       }
 
       void end_speculation(){
-          //cout << "segheap: end_speculation" << " " << this << " " << getpid() << endl;
           restoreBins(false);
           isSpeculating=false;
           super::bigheap.end_speculation();
+
       }
       
     void freeAll (void) {
@@ -383,33 +376,35 @@ namespace HL {
 
     inline void * malloc (const size_t sz) {
       void * ptr = NULL;
+      int sizeClass=-1;
+      
       if (sz <= super::maxObjectSize) {
-	const int sizeClass = ((scFunction) getSizeClass) (sz);
+        sizeClass = ((scFunction) getSizeClass) (sz);
 	const size_t objectSize = ((csFunction) getClassMaxSize) (sizeClass);
 	assert (objectSize >= sz);
 	assert (((scFunction) getSizeClass)(objectSize) == sizeClass);
 	assert (sizeClass >= 0);
 	assert (sizeClass < NumBins);
-        
-        if (isSpeculating){
-            addRestoreBin(sizeClass);
-        }
-	ptr = super::myLittleHeap[sizeClass].malloc (objectSize);
+
+	ptr = super::myLittleHeap[sizeClass].malloc (objectSize);        
         if (!ptr){
-            if (isSpeculating){
-                //cout << "segheap: bigheap allocation " << getpid() << endl;
-                popRestoreBin();
-            }
             ptr = super::bigheap.malloc (objectSize);
 	}
       }
       else if (isSpeculating){
-          //cout << "segheap returning NULL " << getpid() << endl;
-              return NULL;
+          //This may be too pessimistic. If the zoneHeap's zone is large enough to fulfill the
+          //request then we'd be fine.
+          ptr = NULL;
       }
       else{
           ptr = super::bigheap.malloc (sz);
       }
+
+      //add the bin to list of bins we may need to restore
+      if (isSpeculating && sizeClass >= 0){
+          addRestoreBin(sizeClass);
+      }
+      
       return ptr;
     }
 
@@ -441,6 +436,8 @@ namespace HL {
 	}
 
 	super::myLittleHeap[objectSizeClass].free (ptr);
+
+        
         if (isSpeculating){
             addRestoreBin(objectSizeClass);
             //TODO: store up memoryHeld to add later???
