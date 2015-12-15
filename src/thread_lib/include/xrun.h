@@ -102,6 +102,9 @@ private:
     static uint64_t _last_token_release_time;
 
     static int characterize_lock_count, characterize_barrier_wait;
+
+    static size_t monitor_address;
+
     
 public:
 
@@ -127,6 +130,14 @@ public:
     characterize_barrier_wait=0;
     tx_current_coarsening_level=LOGICAL_CLOCK_MIN_ALLOWABLE_TX_SIZE;
     tx_monitor_next=false;
+
+    char * monitor_addr_tmp=getenv("CONSEQ_MONITOR");
+    if (monitor_addr_tmp && strlen(monitor_addr_tmp)>0){
+        monitor_address=(size_t)strtol(monitor_addr_tmp, NULL, 16);
+    }
+    else{
+        monitor_address=0xDEAD;
+    }
     
     installSignalHandler();
 
