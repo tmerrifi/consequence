@@ -69,6 +69,7 @@ namespace HL {
     }
 
       inline void checkpoint(){
+          assert(checkpointed==false);
           dict.checkpoint();
           checkpointed=true;
       }
@@ -78,6 +79,7 @@ namespace HL {
       }
 
       void revert(){
+          assert(checkpointed==true);
           dict.restore();
           checkpointed=false;
       }
