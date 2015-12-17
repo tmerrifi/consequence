@@ -5,17 +5,34 @@
 #4 us per pixel
 #5 user friendly name (workload name?)
 
-width=50000
+width=1000
 
-cat $1 | grep EVENT: | awk -v usperpixel="$4" '$5<10{seg=int($3/('$width'*usperpixel)); print seg"_"$0;}' > out;
+
+cat $1 | grep EVENT: | awk '{seg=int($3/'$width'); print seg" "$0;}' > out;
+
+echo "# of segments: "`cat out | awk '{if ($1 > m){m=$1;}}END{print m}'`
 
 for i in `seq $3 $(($3+$2))`;
 do
 
-cat out | egrep "^"$i"_EVENT" | \
-awk -v usperpixel="$4" -v seg="$i" '{print $1" "$2" "int(($3-('$width'*usperpixel*int(seg)))/usperpixel)" "int(($4-('$width'*usperpixel*int(seg)))/usperpixel)" "$5" "$6" "$7" "$8" "$9" "$10" "$11" "$12" "$13" "$14" "$15}' | \
-sed s/"[0-9]*_"/""/g> /tmp/out$i;
+    echo "working on figure "$i;
+    
+    cat out | \
+        awk -v usperpixel="$4" -v width="$width" -v seg="$i" '$1==seg{ \
+printf $2" "$3" "($4-($1*width))*usperpixel" "($5-($1*width))*usperpixel" "; \
+       for (i=6;i<=16;i++){ printf $i" ";} printf "\n";}' | sed s/"[0-9]*_"/""/g> /tmp/out$i;
 
-./gen_visualization.sh /tmp/out$i $5_$i;
+    lowest_time=`cat /tmp/out$i | grep EVENT: | sort -n -k 3,3 | head -1 | awk '{print $3}'`
 
+    cat /tmp/out$i | grep EVENT: | sed s/"EVENT: "/""/g |
+        awk -v l="$lowest_time" '{printf $1" "($2-l)" "($3-l)" "; for (i=4;i<=15;i++){ printf $i" ";} printf "\n";}' > thread_events_viewer/ri_output;
+  
+
+    cd thread_events_viewer;
+    cat ri_output | python thread_events_viewer.py $5"_"$i $((width*$4));
+    mv ri_output "trace_"$5"_"$i;
+    cd -;
+    
 done;
+
+rm out /tmp/out*;
