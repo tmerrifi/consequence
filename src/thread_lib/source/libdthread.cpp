@@ -378,7 +378,11 @@ ssize_t read(int fd, void *buf, size_t count) {
 	
 	return WRAP(read)(fd, buf, count);
 }
-  
+
+void perror ( const char * str ){
+    cout << str << endl;
+}
+    
   // DISABLED
 #if 0
 void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
