@@ -73,6 +73,7 @@ private:
     
     static int reverts;
     static int locks_elided;
+    static int token_acq;
     
     /******these variables keep track of some of the coarsening thread-local state*/
     static int tx_coarsening_counter;
@@ -117,6 +118,7 @@ public:
     reverts=0;
     spec_dirty_count=0;
     locks_elided=0;
+    token_acq=0;
     _initialized = false;
     _lock_count = 0;
     _token_holding = false;
@@ -277,7 +279,7 @@ public:
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK, NULL);
         if (_speculation->validate()){
             determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
-            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, NULL);
+            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, (void *)_speculation->getTerminateReasonType());
             return 1;
         }
 #else
@@ -338,7 +340,9 @@ public:
       else{
           ThreadPool::getInstance().add_thread_to_pool_by_id(_thread_index);
       }
-      cout << "reverts: " << reverts << " sync ops elided: " << locks_elided << " total lock count: " << characterize_lock_count << " " << getpid() << endl;
+      cout << "reverts: " << reverts << " sync ops elided: " <<
+          locks_elided << " total lock count: " << characterize_lock_count << " " <<
+          " tokenacqs: " << token_acq << " " << getpid() << endl;
       xmemory::sleep();
       //the token is released in here....
       determ::getInstance().deregisterThread(_thread_index);
@@ -492,6 +496,7 @@ public:
     
     /* Heap-related functions. */
   static inline void * malloc(size_t sz) {
+      determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MALLOC, (void *)sz);
       void * ptr = conseq_malloc::malloc(sz);
       if (ptr==NULL && _speculation->isSpeculating()){
           //we would get here if the thread-local heap tried to allocate from the shared heap
@@ -511,6 +516,7 @@ public:
       return conseq_malloc::calloc(nmemb, sz);
   }
   static inline void free(void * ptr) {
+      determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_FREE, NULL);
       conseq_malloc::free(ptr);
   }
 
@@ -540,15 +546,21 @@ public:
 
     ///// conditional variable functions.
   static void cond_init(void * cond) {
+      determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_COND_INIT, (void *)cond);
       stopClock();
-      waitToken();
+      bool skip = (singleActiveThread() || _speculation->isSpeculating()) ;
+      if (!skip){
+          waitToken();
+      }
       determ::getInstance().cond_init(cond);
 #ifdef PRINT_SCHEDULE
       cout << "SCHED: COND INIT - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(cond) << endl;
       fflush(stdout);
 #endif
-      commitAndUpdateMemory();
-      putToken();
+      if (!skip){
+          commitAndUpdateMemory();
+          putToken();
+      }
       startClock();
   }
 
@@ -560,14 +572,19 @@ public:
   // Barrier support
   static int barrier_init(pthread_barrier_t *barrier, unsigned int count) {
       stopClock();
-      waitToken();
+      bool isSingleActiveThread = singleActiveThread();
+      if (!isSingleActiveThread){
+          waitToken();
+      }
       determ::getInstance().barrier_init(barrier, count);
 #ifdef PRINT_SCHEDULE
       cout << "SCHED: BARRIER INIT - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(barrier) << endl;
       fflush(stdout);
 #endif
-      commitAndUpdateMemory();
-      putToken();
+      if (!isSingleActiveThread){
+          commitAndUpdateMemory();
+          putToken();
+      }
       startClock();
       return 0;
   }
@@ -581,14 +598,20 @@ public:
   /// FIXME: maybe it is better to save those actual mutex address in original mutex.
   static int mutex_init(pthread_mutex_t * mutex) {
       stopClock();
-      waitToken();
+      determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_INIT, (void *)mutex);
+      bool skip = (singleActiveThread() || _speculation->isSpeculating()) ;
+      if (!skip){
+          waitToken();
+      }
       determ::getInstance().lock_init((void *)mutex);
 #ifdef PRINT_SCHEDULE
       cout << "SCHED: MUTEX INIT - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(mutex) << " " << determ_task_clock_read() << " " << determ_debug_notifying_clock_read() << endl;
       fflush(stdout);
 #endif
-      commitAndUpdateMemory();
-      putToken();
+      if (!skip){
+          commitAndUpdateMemory();
+          putToken();
+      }
       startClock();
       return 0;
   }
@@ -612,6 +635,7 @@ public:
       struct timespec t1,t2;
       int spin_counter=0;
       if (!_token_holding){
+          token_acq++;
 #ifdef TRACK_LIBRARY_CYCLES
           unsigned long long start_cycles = determ_task_clock_read_cycle_counter();
 #endif
@@ -910,6 +934,7 @@ public:
             determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
         }
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
+        determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_LOCK, mutex);
         //*************END DEBUG CODE*********************
 
 #ifdef USE_TAGGING
@@ -951,8 +976,7 @@ public:
           determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
       }
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
-      //**************************************
-      //**************DEBUG CODE**************
+      determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_UNLOCK, mutex);
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
       //*************END DEBUG CODE*********************
       bool isSpeculating=_speculation->isSpeculating();
@@ -1151,6 +1175,12 @@ public:
       int shouldSpecResult;
       
       stopClock();
+
+#ifdef PRINT_SCHEDULE
+      cout << "SCHED: COND BROADCAST - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(cond) << endl;
+      fflush(stdout);
+#endif
+      
       if (_speculation->isSpeculating()){
           //should we continue speculating??
           if (_speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult)){
@@ -1175,11 +1205,6 @@ public:
 #ifdef TOKEN_ORDER_ROUND_ROBIN
       determ_task_clock_add_ticks(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY);
 #endif
-#ifdef PRINT_SCHEDULE
-      cout << "SCHED: COND BROADCAST - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(cond) << endl;
-      fflush(stdout);
-#endif
-
       putToken();
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
       startClock();
@@ -1241,10 +1266,10 @@ public:
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK, NULL);
         if (_speculation->validate()){
             determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
+            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, (void *)_speculation->getTerminateReasonType());
             locks_elided+=_speculation->getEntriesCount();
             _speculation->commitSpeculation(get_ticks_for_speculation());
             xmemory::end_speculation();
-            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, NULL);
         }
         commitAndUpdateMemory();
     }

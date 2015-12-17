@@ -244,7 +244,6 @@ public:
                 Pause();
             }
         }
-
         conv_commit_and_update(snap_memory);        
     }
 

@@ -7,11 +7,15 @@ class syncStats{
  private:
     double meanInterCSTime;
     uint64_t lastSyncEnd;
-
+    uint64_t specFailed;
+    uint64_t specTotal;
+    
  public:
     syncStats(){
         meanInterCSTime=0;
         lastSyncEnd=0;
+        specTotal=10;
+        specFailed=1;
     }
     
     void endSync(uint64_t currentTime){
@@ -21,6 +25,18 @@ class syncStats{
 
     double getMeanInterCSTime(){
         return meanInterCSTime;
+    }
+
+    void specInc(){
+        specTotal++;
+    }
+
+    void specFailedInc(){
+        specFailed++;
+    }
+
+    double specPercentageOfFailure(){
+        return (double)specFailed/(double)specTotal;
     }
 };
 

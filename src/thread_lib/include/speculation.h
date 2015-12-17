@@ -2,7 +2,7 @@
 #define CONSEQ_SPECULATION_H
 
 #include <assert.h>
-
+#include <math.h>
 #include "checkpoint.h"
 #include "sync_types.h"
 
@@ -18,16 +18,25 @@
 //basically just infinity...relying on SPECULATION_ENTRIES_MAX
 #define SPECULATION_ENTRIES_MAX 15
 #define SPECULATION_MAX_TICKS 500000000
+#define SPECULATION_MIN_TICKS 5000
 #else
-
+//!TOKEN_ORDER_ROUND_ROBIN
 #ifndef SPECULATION_ENTRIES_MAX
 #define SPECULATION_ENTRIES_MAX 100
 #endif
 
+//this number will be adjusted during adaptation
 #ifndef SPECULATION_MAX_TICKS
 #define SPECULATION_MAX_TICKS 30000
 #endif
 
+//we never adapt less than this number
+#ifndef SPECULATION_MIN_TICKS
+#define SPECULATION_MIN_TICKS 10000
+#endif
+
+
+//end of !TOKEN_ORDER_ROUND_ROBIN
 #endif 
 
 #define SPECULATION_ENTRIES_MAX_ALLOCATED (SPECULATION_ENTRIES_MAX+50)
@@ -40,19 +49,16 @@
 
 #else
 
-#define SUCCEEDED_TICK_INC 500
-#define SUCCEEDED_TICK_DEC 2000
+#define SUCCEEDED_TICK_INC 5000
+#define SUCCEEDED_TICK_DEC 10000
+
+
 
 #endif
 
-#define SPEC_STATE_FAILED_THREE 1
-#define SPEC_STATE_FAILED_TWO 2
-#define SPEC_STATE_FAILED_ONE 3
-#define SPEC_STATE_SUCCESS_ONE 4
-#define SPEC_STATE_SUCCESS_TWO 5
-#define SPEC_STATE_SUCCESS_THREE 6
-
 #define SPEC_TRY_AFTER_FAILED 100
+
+#define SPEC_TICKS_TO_HOLD_SIGNAL 10000
 
 #ifdef SPEC_DISABLE_ADAPTATION
 
@@ -76,12 +82,22 @@
 //how much adaptation should we do in outside of the learning phase?
 #define SPEC_ADAPTIVE_FREQ_NONLEARNING 50
 
+//percentage of failure we are willing to accept
+#define SPEC_SYNC_MIN_THRESHOLD 20.0
+
 #endif
+
+#define EWMA_ALPHA .1F
 
 class speculation{
 
  public:
     typedef enum {SPEC_ENTRY_LOCK, SPEC_ENTRY_SIGNAL, SPEC_ENTRY_BROADCAST} speculation_entry_type;
+
+    typedef enum { SPEC_TERMINATE_REASON_EXCEEDED_TICKS=1, SPEC_TERMINATE_REASON_EXCEEDED_OBJECT_COUNT=2,
+                   SPEC_TERMINATE_REASON_PENDING_SIGNAL=3, SPEC_TERMINATE_REASON_SPEC_DISABLED=4,
+                   SPEC_TERMINATE_REASON_NONE=5, SPEC_TERMINATE_REASON_UNINITIALIZED=6,
+                   SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK=7, SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_GLOBAL=8   } spec_terminate_reason_type;
     
  private:
     
@@ -104,16 +120,36 @@ class speculation{
     uint64_t ticks;
     uint64_t start_ticks;
     uint64_t seq_num;
-    uint8_t state;
+    uint64_t failure_count;
+    uint64_t tx_count;
+    uint64_t signal_delay_ticks;
+    double global_success_rate;
+        
     bool learning_phase;
     bool buffered_signal;
     uint32_t learning_phase_count;
+    spec_terminate_reason_type terminated_spec_reason;
+
+    
+    void update_global_success_rate(bool success){
+        if (success){
+            global_success_rate=(EWMA_ALPHA*100.0) + (global_success_rate*(1.0 - EWMA_ALPHA));
+        }
+        else{
+            global_success_rate=global_success_rate*(1.0 - EWMA_ALPHA);
+        }
+    }
+
     
      bool verify_synchronization(){
-        for (int i=0;i<entries_count;i++){
+         int r = rand();
+         for (int i=0;i<entries_count;i++){
             SyncVarEntry * entry = entries[i].entry;
             if (entry->last_committed > logical_clock_start){
-                //cout << "failed " << getpid() << " " << entry << endl;
+                //this entry caused us to fail...update its stats
+                entry->stats->specFailedInc();
+                failure_count++;
+                update_global_success_rate(false);
                 return false;
             }
         }
@@ -131,16 +167,19 @@ class speculation{
         logical_clock_start=0;
         max_entries=SPECULATION_ENTRIES_MAX;
         max_ticks=SPECULATION_MAX_TICKS;
-        state=SPEC_STATE_SUCCESS_ONE;
         buffered_signal=false;
         seq_num=0;
+        signal_delay_ticks=0;
+        global_success_rate=100.0;
+        terminated_spec_reason=SPEC_TERMINATE_REASON_NONE;
 #ifdef SPEC_DISABLE_ADAPTATION
         learning_phase=false;  
 #else
         learning_phase=true;
 #endif
         learning_phase_count=0;
-
+        
+        tx_count=10;
     }
 
 
@@ -164,102 +203,107 @@ class speculation{
                 learning_phase=false;
                 learning_phase_count=0;
             }
-            
-            if (succeeded){
-                if (this->ticks >= max_ticks){
+            if (succeeded && this->ticks >= max_ticks){
                     max_ticks+=SUCCEEDED_TICK_INC;
-                }
-                if (this->state!=SPEC_STATE_SUCCESS_THREE){
-                    this->state++;
-                }
             }
-            else{
-                if (this->state!=SPEC_STATE_FAILED_THREE){
-                    this->state--;
-                }
-                max_ticks=(max_ticks<SUCCEEDED_TICK_DEC) ? 0 : max_ticks-SUCCEEDED_TICK_DEC;
+            else if (!succeeded){
+                max_ticks=((max_ticks - SUCCEEDED_TICK_DEC)<SPECULATION_MIN_TICKS)
+                    ? SPECULATION_MIN_TICKS : max_ticks-SUCCEEDED_TICK_DEC;
             }
         }
 #endif
     }
+        
+    //using the multiplication method to do a probabilistic speculation
+    bool __shouldAttempt(double percentageOfSuccess){
+        const double A=0.432;
+        double val = floor(100 * ( ((double)seq_num*A) - floor((double)seq_num*A)));
+        //cout << "\% of success " << percentageOfSuccess << " val " << val << " " << (val<percentageOfSuccess) << endl;
+        return val < percentageOfSuccess;
+    }
 
-    bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
-        updateTicks();
 #ifdef USE_SPECULATION
-        if (state==SPEC_STATE_FAILED_THREE){
-            *result=1;
-            return false;
-        }
+    
+    bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
+        bool return_val;
+        updateTicks();
+        SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
+
         if (active_speculative_entries > 0){
             if (getSyncEntry(entry_ptr)==NULL){
                 cout << "nested speculation with uninitialized sync object...not currently supported" << endl;
                 exit(-1);
             }
-            *result=2;
-            //cout << "0: " << entries_count << endl;
             //we have to keep going here...since we're still "holding" a lock. 
-            return true;
+            return_val=true;
+        }
+        else if (!isSpeculating() && !__shouldAttempt( global_success_rate )){
+            terminated_spec_reason = SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_GLOBAL;
+            return_val=false;
         }
         else if (getSyncEntry(entry_ptr)==NULL){
-            *result=3;
-            return false;
+            terminated_spec_reason = SPEC_TERMINATE_REASON_UNINITIALIZED;
+            return_val=false;
         }
-        //lets kill it if we are buffering a signal. Don't want to delay other threads due to speculation
-        else if (buffered_signal==true){
-            *result=15;
-            return false;
+        //if we're about to speculate on a lock that is likely to cause a conflict, lets not to it
+        else if (entry->stats->specPercentageOfFailure() > SPEC_SYNC_MIN_THRESHOLD ){
+            terminated_spec_reason = SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK;
+            return_val=false;
         }
 #ifdef SPEC_USE_TICKS
         else if (entries_count >= max_entries){
-            //cout << "4: " << entries_count << endl;
-            *result=4;
-            return false;
-        }
-        else if (ticks < max_ticks){
-            //cout << "5: " << ticks << " " << getpid() << endl;
-            *result=5;
-            return true;
+            terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_OBJECT_COUNT;
+            return_val=false;
         }
         else if (ticks >= max_ticks){
-            if (isSpeculating()){
-                *result=11;
-            }
-            else{
-                *result=12;
-            }
-            //cout << "11: " << ticks << " " << max_ticks  << " " << getpid() << endl;
-            return false; 
+            terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_TICKS;
+            return_val=false; 
+        }
+        else if (buffered_signal==true && (ticks - signal_delay_ticks) > SPEC_TICKS_TO_HOLD_SIGNAL) {
+            terminated_spec_reason = SPEC_TERMINATE_REASON_PENDING_SIGNAL;
+            return_val=false;            
         }
 #else
-        else if (entries_count < max_entries){
-            //cout << "6: " << entries_count << endl;
-            *result=6;
-            return true;
+        //lets kill it if we are buffering a signal. Don't want to delay other threads due to speculation
+        else if (buffered_signal==true){
+            terminated_spec_reason = SPEC_TERMINATE_REASON_PENDING_SIGNAL;
+            return_val=false;
         }
 #endif
-       
         else{
-            *result=7;
-            return false;
+            return_val=true;
         }
-#else
-        //if speculation is disabled
-        *result=8;
-        return false;
-#endif
+
+
+        /*if (return_val==false){
+            cout << "endspec " << getpid() << " " << terminated_spec_reason << endl;
+        }
+
+        if (terminated_spec_reason==SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_GLOBAL){
+            cout << "globalfail " << getpid() << " " << getPercentageOfSuccess() << " " << global_success_rate << endl;
+            }*/
+        
+        return return_val;
     }
     
     //called by code that is not adding a new sync var to the current
     //set of entries
-     bool shouldSpeculate(uint64_t logical_clock){
-#ifdef USE_SPECULATION
+    bool shouldSpeculate(uint64_t logical_clock){
         return true;
-#else
-        //if speculation is disabled
-        return false;
-#endif
     }
+#else
+
+    bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
+        return false;
+    }
+
+    bool shouldSpeculate(uint64_t logical_clock){
+        return false;
+    }
+
     
+#endif
+     
      bool speculate(void * entry_ptr, uint64_t logical_clock, speculation_entry_type type){
         if (entries_count>=SPECULATION_ENTRIES_MAX_ALLOCATED){
             cout << "Too many speculative entries " << endl;
@@ -272,6 +316,7 @@ class speculation{
         }
         if (type == SPEC_ENTRY_SIGNAL || type == SPEC_ENTRY_BROADCAST){
             buffered_signal=true;
+            signal_delay_ticks=ticks;
         }
         else if (type == SPEC_ENTRY_LOCK) {
             active_speculative_entries++;
@@ -281,10 +326,12 @@ class speculation{
         entries[entries_count].type=type;
         entries[entries_count].acquisition_logical_time=logical_clock;
         entries_count++;
-        //cout << "adding " << entry_ptr << " " << active_speculative_entries << endl;
+        entry->stats->specInc();
         if (!_checkpoint.is_speculating){
             logical_clock_start=logical_clock;
             start_ticks = determ_task_clock_read();
+            terminated_spec_reason = SPEC_TERMINATE_REASON_NONE;
+            tx_count++;
             return _checkpoint.checkpoint_begin();
         }
         else{
@@ -303,28 +350,25 @@ class speculation{
             return 0;
         }
         else if (!verify_synchronization() || active_speculative_entries > 0){
-            //            if (active_speculative_entries==2){
-                //__conseq_dump_stack();
-                //cout << "revert: " << active_speculative_entries << " " << getpid() << endl;
-            //}
             adaptSpeculation(false);
             entries_count=0;
             ticks=0;
             start_ticks=0;
             active_speculative_entries=0;
             buffered_signal=false;
-            //cout << "revert!!! " << getpid() << endl;
-            //do what we need to do
+            signal_delay_ticks=0;
             _checkpoint.checkpoint_revert();
         }
-        adaptSpeculation(true);
-        return 1;
+        else{
+            adaptSpeculation(true);
+            update_global_success_rate(true);
+            return 1;
+        }
     }
 
      void endSpeculativeEntry(void * entry_ptr){
          assert(active_speculative_entries>0);
          active_speculative_entries--;
-         //cout << "ending " << entry_ptr << " " << active_speculative_entries << endl;
      }
      
      void commitSpeculation(uint64_t logical_clock){
@@ -347,6 +391,7 @@ class speculation{
 
          entries_count=0;
          buffered_signal=false;
+         signal_delay_ticks=0;
          _checkpoint.is_speculating=false;
          ticks=0;
          seq_num++;
@@ -359,12 +404,6 @@ class speculation{
         SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
         entry->last_committed=logical_clock;
         seq_num++;
-        //maybe we should try speculation again?
-        if (this->state==SPEC_STATE_FAILED_THREE &&
-            (seq_num % SPEC_TRY_AFTER_FAILED) == 0){
-            //by incrementing the state, we'll try speculation once more
-            this->state++;
-        }
      }
 
      int getActiveEntriesCount(){
@@ -381,6 +420,18 @@ class speculation{
 
      uint64_t getMaxTicks(){
          return max_ticks;
+     }
+
+     spec_terminate_reason_type getTerminateReasonType(){
+         return terminated_spec_reason;
+     }
+
+     double getPercentageOfSuccess(){
+         return (((double)(tx_count - failure_count))/(double)tx_count)*100.0;
+     }
+
+     uint64_t getTxCount(){
+         return tx_count;
      }
 };
 
