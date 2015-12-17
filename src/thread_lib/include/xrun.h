@@ -1173,6 +1173,7 @@ public:
 
   static void cond_broadcast(void * cond) {
       int shouldSpecResult;
+      bool wasSpeculating;
       
       stopClock();
 
@@ -1180,16 +1181,41 @@ public:
       cout << "SCHED: COND BROADCAST - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(cond) << endl;
       fflush(stdout);
 #endif
-      
-      if (_speculation->isSpeculating()){
-          //should we continue speculating??
-          if (_speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult)){
-              //ready to add our entry
-              _speculation->speculate(cond, _last_token_release_time, speculation::SPEC_ENTRY_BROADCAST);
-              return;
-          }
-      }
+      wasSpeculating=_speculation->isSpeculating();
 
+      cout << "broadcast " << singleActiveThread() << " " << _lock_count << endl;
+      
+      /*speculative path*/
+      if(!(wasSpeculating==false && _lock_count>0) &&
+         _speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult)){
+#ifdef NO_DETERM_SYNC
+          if (_speculation->speculate(cond,get_ticks_for_speculation(), speculation::SPEC_ENTRY_SIGNAL)==true){
+#else
+              if (_speculation->speculate(cond,_last_token_release_time, speculation::SPEC_ENTRY_SIGNAL)==true){
+#endif
+                  if (!wasSpeculating){
+                      //HERE we know that we are beginning a speculation
+                      spec_dirty_count=0;
+                      xmemory::begin_speculation();
+                      determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
+                      cout << "starting spec here " << _lock_count << endl;
+                      startClock(true);
+                  }
+                  else{
+                      //cout << "here???? " << endl;
+                      startClock();
+                  }
+                  return;
+              }
+              else{
+                  determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
+                  //we just got back from a rolled back speculation
+                  determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_FAILED_SPECULATION, (void *)id);
+                  reverts++;
+              }
+      }
+      /*endspeculative path*/
+      
       stopClockForceEnd();
       //if we are in a coarse tx, we're about to signal another thread...so reset it
       resetTXCoarsening();
