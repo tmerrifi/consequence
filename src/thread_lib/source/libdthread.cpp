@@ -379,9 +379,32 @@ ssize_t read(int fd, void *buf, size_t count) {
 	return WRAP(read)(fd, buf, count);
 }
 
-void perror ( const char * str ){
-    cout << str << endl;
-}
+    int close (int fd){
+        xrun::beginSysCall();
+        int result=WRAP(close)(fd);
+        xrun::endSysCall();
+        return result;
+    }
+
+    int __open_2(const char * pathname, int flags){
+        xrun::beginSysCall();
+        int result=WRAP(__open_2)(pathname, flags);
+        xrun::endSysCall();
+        return result;
+    }
+
+    /*int creat(const char * pathname, mode_t mode){
+        xrun::beginSysCall();        
+        int result=WRAP(creat)(pathname, mode);
+        xrun::endSysCall();
+        return result;
+        }*/
+
+
+    
+    //void perror ( const char * str ){
+    //    cout << str << endl;
+    //}
     
   // DISABLED
 #if 0

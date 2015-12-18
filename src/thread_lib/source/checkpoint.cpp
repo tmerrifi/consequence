@@ -12,6 +12,7 @@
 #include <fstream>
 #include <sstream>
 #include "checkpoint.h"
+#include "real.h"
 
 using namespace std;
 
@@ -41,8 +42,9 @@ void * checkpoint::find_stack_top(void){
 				end = (void *)strtoul(ptr, NULL, 16);
 		
 				if ((void *)&var_on_stack >= start && (void *)&var_on_stack <= end) {
-					close(fd);
-					return end;
+                                    //close(fd);
+                                    WRAP(close)(fd);
+                                    return end;
 				}
 				else{
 					n = -1;
@@ -51,7 +53,8 @@ void * checkpoint::find_stack_top(void){
  			n++;
 		}
 		
-		close(fd);
+		//close(fd);
+                WRAP(close)(fd);
 		cout << "Error in finding top of the stack" << endl;
 		return 0;
 	}

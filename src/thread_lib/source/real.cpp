@@ -31,6 +31,8 @@
 #include "debug.h"
 #include "real.h"
 
+
+
 // libc functions
 void* (*WRAP(mmap))(void*, size_t, int, int, int, off_t);
 void* (*WRAP(malloc))(size_t);
@@ -41,6 +43,10 @@ size_t (*WRAP(malloc_usable_size))(void *);
 ssize_t (*WRAP(read))(int, void*, size_t);
 ssize_t (*WRAP(write))(int, const void*, size_t);
 int (*WRAP(sigwait))(const sigset_t*, int*);
+
+int (*WRAP(close))(int);
+int (*WRAP(__open_2))(const char *, int);
+int (*WRAP(creat))(const char *, mode_t);
 
 // pthread basics
 int (*WRAP(pthread_create))(pthread_t*, const pthread_attr_t*, void *(*)(void*), void*);
@@ -87,6 +93,10 @@ void init_real_functions() {
 	SET_WRAPPED(read, RTLD_NEXT);
 	SET_WRAPPED(write, RTLD_NEXT);
 	SET_WRAPPED(sigwait, RTLD_NEXT);
+
+        SET_WRAPPED(__open_2, RTLD_NEXT);
+        SET_WRAPPED(close, RTLD_NEXT);
+        SET_WRAPPED(creat, RTLD_NEXT);
 
 	void *pthread_handle = dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD);
 	if (pthread_handle == NULL) {

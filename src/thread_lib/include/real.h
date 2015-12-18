@@ -17,6 +17,11 @@ extern ssize_t (*WRAP(read))(int, void*, size_t);
 extern ssize_t (*WRAP(write))(int, const void*, size_t);
 extern int (*WRAP(sigwait))(const sigset_t*, int*);
 
+extern int (*WRAP(close))(int);
+extern int (*WRAP(__open_2))(const char *, int);
+extern int (*WRAP(creat))(const char *, mode_t);
+
+
 // pthread basics
 extern int (*WRAP(pthread_create))(pthread_t*, const pthread_attr_t*, void *(*)(void*), void*);
 extern int (*WRAP(pthread_cancel))(pthread_t);

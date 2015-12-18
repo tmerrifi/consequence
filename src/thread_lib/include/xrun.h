@@ -96,6 +96,7 @@ private:
 
     static int sleep_count;
     static bool is_sleeping;
+    static bool alive;
 
     static uint64_t heapVersionToWaitFor;
     static uint64_t globalsVersionToWaitFor;
@@ -114,7 +115,7 @@ public:
 
     void* buf = mmap(NULL, sizeof(speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     _speculation = new (buf) speculation;
-
+    alive=false;
     reverts=0;
     spec_dirty_count=0;
     locks_elided=0;
@@ -300,6 +301,7 @@ public:
     _thread_index = child_index;
     _lock_count = 0;
     _token_holding = false;
+    alive=true;
     reverts=0;
     locks_elided=0;
     
@@ -344,8 +346,10 @@ public:
           locks_elided << " total lock count: " << characterize_lock_count << " " <<
           " tokenacqs: " << token_acq << " " << getpid() << endl;
       xmemory::sleep();
+      alive=false;
       //the token is released in here....
       determ::getInstance().deregisterThread(_thread_index);
+      
   }
 
     static inline void finalThreadExit(void){
@@ -781,7 +785,7 @@ public:
         isSingleActiveThread= !isSpeculating && singleActiveThread();
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
-        if (!isUsingTxCoarsening && !isSingleActiveThread && (failure_count==0) &&
+        if (!isUsingTxCoarsening && (failure_count==0) &&
             _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult) &&
             !(_speculation->isSpeculating()==false && _lock_count>1) ){
             //Here we begin or continue speculation...in the event that a speculation is reverted we will
@@ -1183,8 +1187,6 @@ public:
 #endif
       wasSpeculating=_speculation->isSpeculating();
 
-      cout << "broadcast " << singleActiveThread() << " " << _lock_count << endl;
-      
       /*speculative path*/
       if(!(wasSpeculating==false && _lock_count>0) &&
          _speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult)){
@@ -1284,9 +1286,29 @@ public:
       startClock();
   }
 
-    static void commitAndUpdateMemory(){
-        commitAndUpdateMemory(NULL);
-    }
+  static void beginSysCall(){
+      if (_initialized && alive){
+          stopClockForceEnd();
+          bool acquiringToken=(!_token_holding);
+          if (acquiringToken){
+              waitToken();
+          }          
+          commitAndUpdateMemoryTerminateSpeculation();
+          endTXCoarsening();
+      }
+  }
+
+
+  static void endSysCall(){
+      if (_initialized && alive){
+          startClock();
+      }
+  }
+
+
+  static void commitAndUpdateMemory(){
+      commitAndUpdateMemory(NULL);
+  }
 
     static void commitAndUpdateMemoryTerminateSpeculation(){
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK, NULL);

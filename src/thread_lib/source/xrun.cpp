@@ -11,6 +11,7 @@ int xrun::tx_consecutively_coarsened;
 int xrun::tx_current_coarsening_level;
 int xrun::sleep_count;
 bool xrun::is_sleeping;
+bool xrun::alive;
 bool xrun::tx_monitor_next;
 uint64_t xrun::heapVersionToWaitFor;
 uint64_t xrun::globalsVersionToWaitFor;
