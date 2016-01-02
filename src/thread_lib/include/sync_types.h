@@ -54,11 +54,9 @@ class BarrierEntry : public SyncVarEntry {
 inline void * allocSyncEntry(int size, int counter) {
       SyncVarEntry * syncEntry = (SyncVarEntry *)InternalHeap::getInstance().malloc(size);
       syncEntry->last_committed=0;
-      void * statsMem=xmemory::malloc(sizeof(syncStats));
+      void * statsMem=InternalHeap::getInstance().malloc(sizeof(syncStats));
       syncEntry->stats = new (statsMem) syncStats();
-#ifdef PRINT_SCHEDULE
       syncEntry->id=counter;
-#endif
     return syncEntry;
   }
 
