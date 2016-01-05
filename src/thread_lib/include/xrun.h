@@ -114,7 +114,7 @@ public:
   static void initialize(void) {
 
     void* buf = mmap(NULL, sizeof(speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    _speculation = new (buf) speculation;
+    _speculation = new (buf) speculation(0);
     alive=false;
     reverts=0;
     spec_dirty_count=0;
@@ -306,7 +306,7 @@ public:
     locks_elided=0;
     
     void* buf = mmap(NULL, sizeof(_speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    _speculation = new (_speculation) speculation;
+    _speculation = new (_speculation) speculation(_thread_index);
     
     xmemory::wake();
 #ifdef USE_TAGGING

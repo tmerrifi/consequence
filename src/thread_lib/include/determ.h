@@ -61,7 +61,6 @@
 #include "sync_types.h"
 
 
-#define MAX_THREADS 2048
 #ifdef EVENT_VIEWER
 #define MAX_EVENTS 500000
 #else

@@ -5,11 +5,17 @@
 #include "list.h"
 #include "syncstats.h"
 
+
+
 class SyncVarEntry{
- public:
-    int id;
-    uint64_t last_committed;
-    syncStats * stats;
+public:
+   int id;
+   uint64_t last_committed;
+   syncStats * stats;
+
+   syncStats * getStats(int tid){
+      return &stats[tid%MAX_THREADS];
+   }
 };
 
 class LockEntry :public SyncVarEntry {
@@ -54,7 +60,7 @@ class BarrierEntry : public SyncVarEntry {
 inline void * allocSyncEntry(int size, int counter) {
       SyncVarEntry * syncEntry = (SyncVarEntry *)InternalHeap::getInstance().malloc(size);
       syncEntry->last_committed=0;
-      void * statsMem=InternalHeap::getInstance().malloc(sizeof(syncStats));
+      void * statsMem=InternalHeap::getInstance().malloc(sizeof(syncStats)*MAX_THREADS);
       syncEntry->stats = new (statsMem) syncStats();
       syncEntry->id=counter;
     return syncEntry;

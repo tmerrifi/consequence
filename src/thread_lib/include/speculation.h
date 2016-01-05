@@ -122,7 +122,7 @@ class speculation{
     uint64_t tx_count;
     uint64_t signal_delay_ticks;
     double global_success_rate;
-        
+    int tid;
     bool learning_phase;
     bool buffered_signal;
     uint32_t learning_phase_count;
@@ -145,15 +145,16 @@ class speculation{
             SyncVarEntry * entry = entries[i].entry;
             if (entry->last_committed > logical_clock_start){
                 //this entry caused us to fail...update its stats
-                entry->stats->specFailed();
                 failure_count++;
+                cout << " endspec failed entry " << getpid() << " " << entry->id << " " << entry->getStats(tid)->specPercentageOfSuccess() << " "
+                   << " failed " << entry->getStats(tid)->getFailedCount() << " succeeded " << entry->getStats(tid)->getSucceededCount() << " " << entry->getStats(tid) << " " <<
+                    determ_task_clock_force_read()<<  endl;
                 update_global_success_rate(false);
-                cout << " endspec failed entry " << getpid() << " " << entry->id << " " << entry->stats->specPercentageOfSuccess() << " "
-                   << " failed " << entry->stats->getFailedCount() << " succeeded " << entry->stats->getSucceededCount() << " " << entry->stats << endl;
+                entry->getStats(tid)->specFailed();
                 return false;
             }
             else{
-                entry->stats->specSucceeded();
+                entry->getStats(tid)->specSucceeded();
             }
         }
         return true;
@@ -161,10 +162,11 @@ class speculation{
     
  public:
      
-     speculation(){
+     speculation(int _tid){
         for (int i=0;i<SPECULATION_ENTRIES_MAX_ALLOCATED;++i){
             entries[i].entry=NULL;
         }
+        tid=_tid;
         entries_count=0;
         active_speculative_entries=0;
         logical_clock_start=0;
@@ -249,7 +251,7 @@ class speculation{
             return_val=false;
         }
         //if we're about to speculate on a lock that is likely to cause a conflict, lets not to it
-        else if (entry->stats->specPercentageOfSuccess() < SPEC_SYNC_MIN_THRESHOLD ){
+        else if (entry->getStats(tid)->specPercentageOfSuccess() < SPEC_SYNC_MIN_THRESHOLD ){
             terminated_spec_reason = SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK;
             return_val=false;
         }
@@ -280,7 +282,7 @@ class speculation{
 
         if (return_val==false){
             cout << "endspec " << getpid() << " " << terminated_spec_reason << " " << max_ticks << " " << ticks << " " << entries_count << " "
-                 << entry->stats->specPercentageOfSuccess() << " " << entry->id << endl;
+                 << entry->getStats(tid)->specPercentageOfSuccess() << " " << entry->id << endl;
         }
         
         if (terminated_spec_reason==SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_GLOBAL){

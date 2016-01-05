@@ -54,6 +54,8 @@ extern runtime_data_t *global_data;
 
 #define PROTECTEDHEAP_SIZE (1048576UL * 8000)
 
+#define MAX_THREADS 2048
+
 class xdefines {
 public:
     enum { STACK_SIZE = (1048576UL * 100) } ; // 1 * 1048576 };
