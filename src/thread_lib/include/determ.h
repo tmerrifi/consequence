@@ -1113,8 +1113,6 @@ public:
     else{
         entry->is_acquired = true;
         entry->owner=threadindex;
-        //entry->stats.endSync(determ_task_clock_read());
-        //add_atomic_event(threadindex, DEBUG_TYPE_MUTEX_LOCK, mutex);
         return true;
     }
   }
@@ -1132,7 +1130,6 @@ public:
   inline void lock_release(void * mutex, int threadindex) {
     LockEntry * entry = (LockEntry *)getSyncEntry(mutex);
     //update the stats
-    entry->stats->endSync(determ_task_clock_read()); 
     lock();
     //add_atomic_event(threadindex, DEBUG_TYPE_MUTEX_UNLOCK, mutex);
     entry->is_acquired = false;
