@@ -434,9 +434,6 @@ namespace HL {
 	if (objectSizeClass > 0) {
 	  assert (objectSize >= ((csFunction) getClassMaxSize)(objectSizeClass - 1));
 	}
-
-	super::myLittleHeap[objectSizeClass].free (ptr);
-
         
         if (isSpeculating){
             addRestoreBin(objectSizeClass);
@@ -445,6 +442,8 @@ namespace HL {
         else{
             super::memoryHeld += objectSize;
         }
+
+        super::myLittleHeap[objectSizeClass].free (ptr);
       }
     }
 
