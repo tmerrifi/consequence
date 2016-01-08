@@ -31,7 +31,13 @@
 #ifndef _XHEAP_H_
 #define _XHEAP_H_
 
+#ifdef WEAK_DETERMINISM
+#include "xpersist_weak.h"
+#else
 #include "xpersist.h"
+#endif
+
+
 #include "xdefines.h"
 #include "xplock.h"
 #include "debug.h"

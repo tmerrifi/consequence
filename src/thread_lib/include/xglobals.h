@@ -24,8 +24,14 @@
 #ifndef _XGLOBALS_H_
 #define _XGLOBALS_H_
 
+
 #include "xdefines.h"
+
+#ifdef WEAK_DETERMINISM
+#include "xpersist_weak.h"
+#else
 #include "xpersist.h"
+#endif
 
 #if defined(__APPLE__)
 // We are going to use the Mach-O substitutes for _end, etc.,
