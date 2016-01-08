@@ -87,6 +87,13 @@
 
 #define EWMA_ALPHA .1F
 
+//only try if we believe this is going to work this percentage of the time
+#define SPEC_ATTEMPT_THRESHOLD .9F
+
+//if we don't meet the threshold, try again 1/10 times
+#define SPEC_ATTEMPT_AGAIN .05F
+
+
 class speculation{
 
  public:
@@ -128,6 +135,12 @@ class speculation{
     uint32_t learning_phase_count;
     spec_terminate_reason_type terminated_spec_reason;
 
+
+    void print_active_sync_objects(){
+        for (int i=0;i<entries_count;i++){
+            cout << " , " << entries[i].entry->id << " " << entries[i].type;
+        }
+    }
     
     void update_global_success_rate(bool success){
         if (success){
@@ -146,14 +159,15 @@ class speculation{
             if (entry->last_committed > logical_clock_start){
                 //this entry caused us to fail...update its stats
                 failure_count++;
-                cout << " endspec failed entry " << getpid() << " " << entry->id << " " << entry->getStats(tid)->specPercentageOfSuccess() << " "
+                /*cout << " endspec failed entry " << getpid() << " " << entry->id << " " << entry->getStats(tid)->specPercentageOfSuccess() << " "
                    << " failed " << entry->getStats(tid)->getFailedCount() << " succeeded " << entry->getStats(tid)->getSucceededCount() << " " << entry->getStats(tid) << " " <<
-                    determ_task_clock_force_read()<<  endl;
+                   determ_task_clock_force_read()<<  endl;*/
                 update_global_success_rate(false);
                 entry->getStats(tid)->specFailed();
                 return false;
             }
             else{
+                update_global_success_rate(true);
                 entry->getStats(tid)->specSucceeded();
             }
         }
@@ -221,10 +235,17 @@ class speculation{
         
     //using the multiplication method to do a probabilistic speculation
     bool __shouldAttempt(double percentageOfSuccess){
-        const double A=0.432;
-        double val = floor(100 * ( ((double)seq_num*A) - floor((double)seq_num*A)));
-        //cout << "\% of success " << percentageOfSuccess << " val " << val << " " << (val<percentageOfSuccess) << endl;
-        return val < percentageOfSuccess;
+        bool attempt;
+        if (percentageOfSuccess >= SPEC_ATTEMPT_THRESHOLD){
+            attempt=true;
+        }
+        else{
+            const double A=0.432;
+            double val = floor(100 * ( ((double)seq_num*A) - floor((double)seq_num*A)));
+            //cout << "taking a risk " << getpid() << " " << (val < SPEC_ATTEMPT_AGAIN) << endl;
+            attempt=(val < SPEC_ATTEMPT_AGAIN);
+        }
+        return attempt;
     }
 
 #ifdef USE_SPECULATION
@@ -239,19 +260,23 @@ class speculation{
                 cout << "nested speculation with uninitialized sync object...not currently supported" << endl;
                 exit(-1);
             }
-            //we have to keep going here...since we're still "holding" a lock. 
+            //we have to keep going here...since we're still "holding" a lock.
+            //cout << "nested...." << getpid() << " " << entry->id << " " << active_speculative_entries << " : ";
+            //print_active_sync_objects();
+            //cout << endl;
             return_val=true;
         }
-        else if (!isSpeculating() && !__shouldAttempt( global_success_rate )){
+        /*        else if (!isSpeculating() && !__shouldAttempt( global_success_rate )){
             terminated_spec_reason = SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_GLOBAL;
             return_val=false;
-        }
+            }*/
         else if (getSyncEntry(entry_ptr)==NULL){
             terminated_spec_reason = SPEC_TERMINATE_REASON_UNINITIALIZED;
             return_val=false;
         }
         //if we're about to speculate on a lock that is likely to cause a conflict, lets not to it
-        else if (entry->getStats(tid)->specPercentageOfSuccess() < SPEC_SYNC_MIN_THRESHOLD ){
+        //else if (entry->getStats(tid)->specPercentageOfSuccess() < SPEC_SYNC_MIN_THRESHOLD ){
+        else if (!__shouldAttempt( entry->getStats(tid)->specPercentageOfSuccess() )){
             terminated_spec_reason = SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK;
             return_val=false;
         }
@@ -280,14 +305,14 @@ class speculation{
         }
 
 
-        if (return_val==false){
+        /*if (return_val==false){
             cout << "endspec " << getpid() << " " << terminated_spec_reason << " " << max_ticks << " " << ticks << " " << entries_count << " "
                  << entry->getStats(tid)->specPercentageOfSuccess() << " " << entry->id << endl;
         }
         
         if (terminated_spec_reason==SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_GLOBAL){
             cout << "globalfail " << getpid() << " " << getPercentageOfSuccess() << " " << global_success_rate << endl;
-            }
+            }*/
         
         return return_val;
     }
@@ -337,6 +362,7 @@ class speculation{
             start_ticks = determ_task_clock_read();
             terminated_spec_reason = SPEC_TERMINATE_REASON_NONE;
             tx_count++;
+            //cout << "begin " << getpid() << endl;
             return _checkpoint.checkpoint_begin();
         }
         else{
@@ -355,7 +381,7 @@ class speculation{
             return 0;
         }
         else if (!verify_synchronization() || active_speculative_entries > 0){
-            cout << " endspec failed " << getpid() << endl;
+            //cout << " endspec failed " << getpid() << endl;
             adaptSpeculation(false);
             entries_count=0;
             ticks=0;
@@ -367,7 +393,6 @@ class speculation{
         }
         else{
             adaptSpeculation(true);
-            update_global_success_rate(true);
             return 1;
         }
     }
@@ -382,10 +407,9 @@ class speculation{
 
          for (int i=0;i<entries_count;i++){
              SyncVarEntry * entry = entries[i].entry;
-             if (entries[i].type == SPEC_ENTRY_LOCK){
-                 entry->last_committed=logical_clock;
-             }
-             else if (entries[i].type == SPEC_ENTRY_SIGNAL) {
+             bool firstCommitOfEntry = (entry->last_committed!=logical_clock);
+             
+             if (entries[i].type == SPEC_ENTRY_SIGNAL) {
                  //send the signal we buffered
                  determ::getInstance().cond_signal_inner((CondEntry *)entry);
              }
@@ -393,8 +417,16 @@ class speculation{
                  //send the signal we buffered
                  determ::getInstance().cond_broadcast_inner((CondEntry *)entry);
              }
+
+             if (firstCommitOfEntry){
+                 //update the stats
+                 entry->getStats(tid)->specSucceeded();
+             }
+             
+             entry->last_committed=logical_clock;
+
          }
-         cout << "endspec commit " << entries_count << " " << max_ticks << " " << getpid() << endl;
+         //cout << "commit " << getpid() << " " << entries_count << " " << max_ticks << " " << endl;
          entries_count=0;
          buffered_signal=false;
          signal_delay_ticks=0;

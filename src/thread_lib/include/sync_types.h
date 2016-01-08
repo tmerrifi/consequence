@@ -5,8 +5,6 @@
 #include "list.h"
 #include "syncstats.h"
 
-
-
 class SyncVarEntry{
 public:
    int id;
@@ -60,8 +58,11 @@ class BarrierEntry : public SyncVarEntry {
 inline void * allocSyncEntry(int size, int counter) {
       SyncVarEntry * syncEntry = (SyncVarEntry *)InternalHeap::getInstance().malloc(size);
       syncEntry->last_committed=0;
-      void * statsMem=InternalHeap::getInstance().malloc(sizeof(syncStats)*MAX_THREADS);
-      syncEntry->stats = new (statsMem) syncStats();
+      syncEntry->stats = (syncStats *) InternalHeap::getInstance().malloc(sizeof(syncStats)*MAX_THREADS);
+      for (int i=0;i<MAX_THREADS;i++){
+          syncEntry->stats[i].initSyncStats();
+      }
+      //syncEntry->stats = new (statsMem) syncStats();
       syncEntry->id=counter;
     return syncEntry;
   }
