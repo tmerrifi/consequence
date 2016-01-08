@@ -305,16 +305,6 @@ namespace HL {
           }
       }
 
-
-      int popRestoreBin(){
-          int bin=-1;
-          if (binsToRestoreCount>0){
-              binsToRestoreCount--;
-              bin=binsToRestore[binsToRestoreCount];
-          }
-          return bin;
-      }
-
       void __attribute__ ((noinline)) restoreBins(bool revert){
           for (int i=0;i<binsToRestoreCount;i++){
               if (revert){
@@ -385,7 +375,9 @@ namespace HL {
 	assert (((scFunction) getSizeClass)(objectSize) == sizeClass);
 	assert (sizeClass >= 0);
 	assert (sizeClass < NumBins);
-
+        if (isSpeculating){
+            addRestoreBin(sizeClass);
+        }
 	ptr = super::myLittleHeap[sizeClass].malloc (objectSize);        
         if (!ptr){
             ptr = super::bigheap.malloc (objectSize);
@@ -400,11 +392,6 @@ namespace HL {
           ptr = super::bigheap.malloc (sz);
       }
 
-      //add the bin to list of bins we may need to restore
-      if (isSpeculating && sizeClass >= 0){
-          addRestoreBin(sizeClass);
-      }
-      
       return ptr;
     }
 
