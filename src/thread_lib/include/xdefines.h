@@ -54,7 +54,7 @@ extern runtime_data_t *global_data;
 
 #define PROTECTEDHEAP_SIZE (1048576UL * 8000)
 
-#define MAX_THREADS 2048
+#define MAX_THREADS 256
 
 class xdefines {
 public:
@@ -62,7 +62,7 @@ public:
   enum { PROTECTEDHEAP_CHUNK = 10485760 };
   
   enum { MAX_GLOBALS_SIZE = 1048576UL * 20 };
-  enum { INTERNALHEAP_SIZE = 1048576UL * 100 }; // FIXME 10M 
+  enum { INTERNALHEAP_SIZE = 1048576UL * 2000 }; // FIXME 10M 
   enum { PageSize = 4096UL };
   enum { PAGE_SIZE_MASK = (PageSize-1) };
   enum { NUM_HEAPS = 128 };
