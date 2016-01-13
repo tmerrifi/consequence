@@ -8,7 +8,7 @@ ifeq ($(CONSEQ_TYPE),RRSpec)
 endif
 
 
-ifeq ($(CONSEQ_TYPE),ICSpecCycles)
+ifeq ($(CLOCK_MODE),Cycles)
 	FLAGS = -DLOGICAL_CLOCK_CYCLES
 endif
 

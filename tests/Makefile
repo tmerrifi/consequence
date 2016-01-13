@@ -26,5 +26,7 @@ progs:
 	gcc --std=gnu99 $(CFLAGS) fgl_simple.c -o fgl-simple-det $(CONSEQ_LIBS)
 	gcc --std=gnu99 $(CFLAGS) racey.c -o racey $(PTHREAD_LIBS)
 	gcc --std=gnu99 $(CFLAGS) racey.c -o racey-det $(CONSEQ_LIBS)
+	gcc --std=gnu99 $(CFLAGS) unbalanced.c -o unbalanced-det $(CONSEQ_LIBS)
+	gcc --std=gnu99 $(CFLAGS) unbalanced.c -o unbalanced $(PTHREAD_LIBS)
 clean:
 	rm -f meta_* grace* TASK_CLOCK* barrier-simple barrier-simple-det condvar-simple condvar-simple-det fgl-simple-det fgl-simple racey race-det bug-lockuse bug-lockuse-det;
