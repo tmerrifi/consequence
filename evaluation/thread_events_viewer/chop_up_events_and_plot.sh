@@ -5,7 +5,7 @@
 #4 us per pixel
 #5 user friendly name (workload name?)
 
-width=1000
+width=20000
 
 
 cat $1 | grep EVENT: | awk '{seg=int($3/'$width'); print seg" "$0;}' > out;
