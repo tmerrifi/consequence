@@ -937,6 +937,10 @@ public:
         if (isSpeculating){
             determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
         }
+#ifdef EVENT_VIEWER        
+        determ_task_clock_force_read();
+#endif
+        
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
         determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_LOCK, mutex);
         //*************END DEBUG CODE*********************
@@ -979,6 +983,9 @@ public:
       if (_speculation->isSpeculating()){
           determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
       }
+#ifdef EVENT_VIEWER        
+      determ_task_clock_force_read();
+#endif
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_UNLOCK, mutex);
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
