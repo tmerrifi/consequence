@@ -567,6 +567,8 @@ void task_clock_entry_stop(struct task_clock_group_info * group_info){
 }
 
 void task_clock_entry_read_clock(struct task_clock_group_info * group_info){
+    //use this opportunity to clear the lazy ticks added from userspace
+    __add_lazy_ticks(group_info, current->task_clock.tid);
     if (__tick_counter_is_running(group_info)){
         logical_clock_read_clock_and_update(group_info, __current_tid(), false);
     }
