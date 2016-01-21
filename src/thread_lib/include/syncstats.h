@@ -1,7 +1,7 @@
 #ifndef SYNCSTATS_H
 #define SYNCSTATS_H
 
-#define SYNCSTATS_EWMA_ALPHA .05
+#define SYNCSTATS_EWMA_ALPHA 0.0
 
 class syncStats{
  private:
