@@ -130,12 +130,12 @@ private:
       void start_event(int type, struct timespec * init_time, void * sync_object) {
 #ifdef EVENT_VIEWER
           struct timespec t1;
-          clock_gettime(CLOCK_REALTIME, &t1);
           if (this->event_counter < MAX_EVENTS){
               this->events[this->event_counter].event_type=type;
-              this->events[this->event_counter].begin_time_us=time_util_time_diff(init_time, &t1);
               this->events[this->event_counter].begin_clock=determ_task_clock_read();
               this->events[this->event_counter].sync_object=sync_object;
+              clock_gettime(CLOCK_REALTIME, &t1);
+              this->events[this->event_counter].begin_time_us=time_util_time_diff(init_time, &t1);
           }
 #endif
       }
@@ -144,8 +144,6 @@ private:
 #ifdef EVENT_VIEWER
           struct timespec t1;
           unsigned numa_node, cpu;
-          syscall(__NR_getcpu, &cpu, &numa_node, NULL);
-
           clock_gettime(CLOCK_REALTIME, &t1);
           if (this->event_counter < MAX_EVENTS){
               //if we don't have a begin event, just use the end of the last event
