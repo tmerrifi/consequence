@@ -760,6 +760,12 @@ public:
         return ticks;
     }
 
+    static unsigned long long __rdtsc(void)
+    {
+        unsigned long low, high;
+        asm volatile("rdtsc" : "=a" (low), "=d" (high));
+        return ((low) | (high) << 32);
+    }
 
     static void __mutex_lock_inner(pthread_mutex_t * mutex, bool allow_coarsening) {
         struct local_copy_stats cs;
