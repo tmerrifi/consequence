@@ -17,6 +17,7 @@
 #ifdef TOKEN_ORDER_ROUND_ROBIN
 //basically just infinity...relying on SPECULATION_ENTRIES_MAX
 #define SPECULATION_ENTRIES_MAX 15
+#define SPECULATION_START_TICKS 500000000
 #define SPECULATION_MAX_TICKS 500000000
 #define SPECULATION_MIN_TICKS 5000
 #else
@@ -25,9 +26,13 @@
 #define SPECULATION_ENTRIES_MAX 100
 #endif
 
+#ifndef SPECULATION_START_TICKS
+#define SPECULATION_START_TICKS 30000
+#endif
+
 //this number will be adjusted during adaptation
 #ifndef SPECULATION_MAX_TICKS
-#define SPECULATION_MAX_TICKS 30000
+#define SPECULATION_MAX_TICKS 150000
 #endif
 
 //we never adapt less than this number
@@ -133,6 +138,10 @@ class speculation{
     bool learning_phase;
     bool buffered_signal;
     uint32_t learning_phase_count;
+    SyncVarEntry * entry_ended_spec;
+    struct timespec tx_start_time;
+    struct timespec tx_end_time;
+    
     spec_terminate_reason_type terminated_spec_reason;
 
 
@@ -185,7 +194,7 @@ class speculation{
         active_speculative_entries=0;
         logical_clock_start=0;
         max_entries=SPECULATION_ENTRIES_MAX;
-        max_ticks=SPECULATION_MAX_TICKS;
+        max_ticks=SPECULATION_START_TICKS;
         buffered_signal=false;
         seq_num=0;
         signal_delay_ticks=0;
@@ -205,7 +214,7 @@ class speculation{
     void updateTicks(){
 #ifdef SPEC_USE_TICKS
         if (isSpeculating()){
-            this->ticks=determ_task_clock_force_read() - start_ticks;   //determ_task_clock_get_last_tx_size();
+            this->ticks=determ_task_clock_read() - start_ticks;
         }
 #else
         
@@ -215,20 +224,15 @@ class speculation{
     void adaptSpeculation(bool succeeded){
         //first, should we adapt at all?
 #ifdef SPEC_USE_TICKS
-        if ( (!learning_phase && (seq_num % SPEC_ADAPTIVE_FREQ_NONLEARNING) == 0) ||
-             (learning_phase && (seq_num % SPEC_ADAPTIVE_FREQ_LEARNING) == 0) ){
-            //is the learning phase over????
-            /*if (learning_phase && ++learning_phase_count >= SPEC_LEARNING_PHASE_TX){
-                learning_phase=false;
-                learning_phase_count=0;
-                }*/
-            if (succeeded && this->ticks >= max_ticks){
-                    max_ticks*=SUCCEEDED_TICK_INC;
-            }
-            else if (!succeeded){
-                max_ticks=((max_ticks*SUCCEEDED_TICK_DEC)<SPECULATION_MIN_TICKS) ?
-                    SPECULATION_MIN_TICKS : (max_ticks*SUCCEEDED_TICK_DEC);
-            }
+        if (succeeded && this->ticks >= max_ticks){
+            //could use a max function here
+            max_ticks=((max_ticks*SUCCEEDED_TICK_INC)>SPECULATION_MAX_TICKS) ?
+                SPECULATION_MAX_TICKS : (max_ticks*SUCCEEDED_TICK_INC);
+        }
+        else if (!succeeded){
+            //could use a min function here
+            max_ticks=((max_ticks*SUCCEEDED_TICK_DEC)<SPECULATION_MIN_TICKS) ?
+                SPECULATION_MIN_TICKS : (max_ticks*SUCCEEDED_TICK_DEC);
         }
 #endif
     }
@@ -278,6 +282,7 @@ class speculation{
         //else if (entry->getStats(tid)->specPercentageOfSuccess() < SPEC_SYNC_MIN_THRESHOLD ){
         else if (!__shouldAttempt( entry->getStats(tid)->specPercentageOfSuccess() )){
             terminated_spec_reason = SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK;
+            entry_ended_spec=entry;
             return_val=false;
         }
 #ifdef SPEC_USE_TICKS
@@ -304,6 +309,11 @@ class speculation{
             return_val=true;
         }
 
+        if (return_val==false && entries_count>3){
+            clock_gettime(CLOCK_REALTIME, &tx_end_time);
+            //cout << "ENDING: " << ticks << " " << time_util_time_diff(&tx_start_time, &tx_end_time) << endl;
+        }
+        
 
         /*if (return_val==false){
             cout << "endspec " << getpid() << " " << terminated_spec_reason << " " << max_ticks << " " << ticks << " " << entries_count << " "
@@ -363,6 +373,7 @@ class speculation{
             terminated_spec_reason = SPEC_TERMINATE_REASON_NONE;
             tx_count++;
             //cout << "begin " << getpid() << endl;
+            clock_gettime(CLOCK_REALTIME, &tx_start_time);
             return _checkpoint.checkpoint_begin();
         }
         else{
@@ -381,7 +392,7 @@ class speculation{
             return 0;
         }
         else if (!verify_synchronization() || active_speculative_entries > 0){
-            //cout << " endspec failed " << getpid() << endl;
+            //cout << " failed " << getpid() << " " << entries_count << " " << max_ticks << endl;
             adaptSpeculation(false);
             entries_count=0;
             ticks=0;
@@ -426,7 +437,13 @@ class speculation{
              entry->last_committed=logical_clock;
 
          }
-         //cout << "commit " << getpid() << " " << entries_count << " " << max_ticks << " " << endl;
+         cout << "commit " << getpid() << " entries: " << entries_count << " ticks: " << ticks << " max: " << max_ticks << " " << terminated_spec_reason << endl;
+         if (terminated_spec_reason==SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK){
+             cout << "oops: " << entry_ended_spec->id << " " <<
+                 entry_ended_spec->getStats(tid)->specPercentageOfSuccess() << " " <<
+                 entry_ended_spec->getStats(tid)->getSucceededCount() << " " <<
+                 entry_ended_spec->getStats(tid)->getFailedCount() << endl;
+         }
          entries_count=0;
          buffered_signal=false;
          signal_delay_ticks=0;
