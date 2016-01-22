@@ -30,7 +30,7 @@
 #define MAX_CLOCK_SAMPLE_PERIOD 200000
 
 //whats the minimum overflow period
-#define MIN_CLOCK_SAMPLE_PERIOD 1024
+#define MIN_CLOCK_SAMPLE_PERIOD 20000
 
 //The value bits in the counter...this is very much model specific
 #define X86_CNT_VAL_BITS 48
