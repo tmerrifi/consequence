@@ -372,7 +372,7 @@ class speculation{
             start_ticks = determ_task_clock_read();
             terminated_spec_reason = SPEC_TERMINATE_REASON_NONE;
             tx_count++;
-            //cout << "begin " << getpid() << endl;
+            //cout << "begin " << getpid() << " " << determ_task_clock_read() << endl;
             clock_gettime(CLOCK_REALTIME, &tx_start_time);
             return _checkpoint.checkpoint_begin();
         }
@@ -437,12 +437,12 @@ class speculation{
              entry->last_committed=logical_clock;
 
          }
-         cout << "commit " << getpid() << " entries: " << entries_count << " ticks: " << ticks << " max: " << max_ticks << " " << terminated_spec_reason << endl;
+         //cout << "commit " << getpid() << " entries: " << entries_count << " ticks: " << ticks << " max: " << max_ticks << " " << terminated_spec_reason << endl;
          if (terminated_spec_reason==SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK){
-             cout << "oops: " << entry_ended_spec->id << " " <<
+             /*cout << "oops: " << entry_ended_spec->id << " " <<
                  entry_ended_spec->getStats(tid)->specPercentageOfSuccess() << " " <<
                  entry_ended_spec->getStats(tid)->getSucceededCount() << " " <<
-                 entry_ended_spec->getStats(tid)->getFailedCount() << endl;
+                 entry_ended_spec->getStats(tid)->getFailedCount() << endl;*/
          }
          entries_count=0;
          buffered_signal=false;
