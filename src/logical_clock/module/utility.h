@@ -29,6 +29,9 @@
 
 #define __max(val1, val2) ((val1>val2) ? val1 : val2)
 
+#define __set_ticks_in_userspace(group_info, tid)   \
+    current->task_clock.user_status->ticks=group_info->clocks[tid].ticks;
+
 #define __set_base_ticks(group_info, tid, val) (group_info->clocks[tid].base_ticks=val)
 
 #define __get_base_ticks(group_info, tid) (group_info->clocks[tid].base_ticks)
@@ -44,10 +47,12 @@
 
 #define __inc_clock_ticks(group_info, tid, val) \
     group_info->clocks[tid].ticks+=val; \
+    __set_ticks_in_userspace(group_info, tid); \
     __inc_chunk_ticks(group_info, tid, val);
     
 #define __inc_clock_ticks_no_chunk_add(group_info, tid, val) \
-    group_info->clocks[tid].ticks+=val;
+    group_info->clocks[tid].ticks+=val; \
+    __set_ticks_in_userspace(group_info, tid);
 
 #define __add_lazy_ticks(group_info, tid) \
     if (current->task_clock.user_status->ticks_to_add){ \

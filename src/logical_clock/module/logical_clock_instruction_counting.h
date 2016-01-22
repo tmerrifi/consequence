@@ -100,8 +100,6 @@ static inline void logical_clock_read_clock_and_update(struct task_clock_group_i
         group_info->clocks[id].debug_last_enable_ticks=__get_chunk_ticks(group_info, id);
         //add it to our current clock
         __inc_clock_ticks(group_info, id, delta);
-        //let userspace see it
-        current->task_clock.user_status->ticks=__get_clock_ticks(group_info, current->task_clock.tid);
     }
 }
 

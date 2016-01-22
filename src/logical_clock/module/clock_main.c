@@ -191,7 +191,7 @@ int __determine_lowest_and_notify_or_wait(struct task_clock_group_info * group_i
     int32_t new_low;
 
     //put the clock ticks into userspace no matter what
-    current->task_clock.user_status->ticks=__get_clock_ticks(group_info, current->task_clock.tid);
+    //current->task_clock.user_status->ticks=__get_clock_ticks(group_info, current->task_clock.tid);
 
     //if we're the only active thread, do our work and get out
     if (__current_is_only_active_thread(group_info)){
@@ -281,7 +281,7 @@ void task_clock_add_ticks(struct task_clock_group_info * group_info, int32_t tic
     //TODO: Why are we disabling interrupts here?
     spin_lock(&group_info->lock);
     __inc_clock_ticks_no_chunk_add(group_info, current->task_clock.tid, ticks);
-    current->task_clock.user_status->ticks=__get_clock_ticks(group_info, current->task_clock.tid);
+    //current->task_clock.user_status->ticks=__get_clock_ticks(group_info, current->task_clock.tid);
     lowest_tid=__determine_lowest_and_notify_or_wait(group_info, 11);
     spin_unlock(&group_info->lock);
     if (lowest_tid>=0){
