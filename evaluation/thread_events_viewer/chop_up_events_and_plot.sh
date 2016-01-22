@@ -10,6 +10,8 @@ width=10000
 
 cat $1 | grep EVENT: | awk '{seg=int($3/'$width'); print seg" "$0;}' > out;
 
+sleep 10;
+
 echo "# of segments: "`cat out | awk '{if ($1 > m){m=$1;}}END{print m}'`
 
 for i in `seq $3 $(($3+$2))`;
