@@ -80,7 +80,7 @@ CXX = g++
 
 CFLAGS32 = -g -march=core2 -mtune=core2 -msse3 $(LIB_ARCH) -DSSE_SUPPORT -O3 -shared -fPIC -D'CUSTOM_PREFIX(x)=grace\#\#x' $(CONSEQ_FLAGS) $(CLOCK_FLAGS) $(VIEWER_MODE)
 
-LIBS = -ldl -lpthread -lDetermTaskClock -lksnap
+LIBS = -ldl -lpthread -lDetermTaskClock -lksnap -lperfcounter -lftrace
 
 all: $(BINARY_NAME)
 
