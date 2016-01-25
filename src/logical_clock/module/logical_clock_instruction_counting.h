@@ -162,9 +162,6 @@ static inline void logical_clock_update_overflow_period(struct task_clock_group_
             }
         }
         group_info->clocks[id].event->hw.sample_period =  __min(__bound_overflow_period(group_info, id, new_sample_period), MAX_CLOCK_SAMPLE_PERIOD);
-        if (!__single_stepping_on(group_info, id) &&
-            group_info->clocks[id].event->hw.sample_period + __get_chunk_ticks(group_info, id) > IMPRECISE_BOUNDED_CHUNK_SIZE){
-        }
     }
 
 #endif
@@ -172,7 +169,7 @@ static inline void logical_clock_update_overflow_period(struct task_clock_group_
 
 static inline void logical_clock_reset_overflow_period(struct task_clock_group_info * group_info, int id){
 #ifdef USE_ADAPTIVE_OVERFLOW_PERIOD
-    group_info->clocks[current->task_clock.tid].event->hw.sample_period=0;
+    group_info->clocks[current->task_clock.tid].event->hw.sample_period=MIN_CLOCK_SAMPLE_PERIOD;
     local64_set(&group_info->clocks[current->task_clock.tid].event->hw.period_left,0);
 #endif
 }
