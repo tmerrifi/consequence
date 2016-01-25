@@ -13,6 +13,10 @@
 #include "debug.h"
 
 #include <determ_clock.h>
+#include <perfcounterlib.h>
+
+#include <ftrace.h>
+
 
 #ifdef TOKEN_ORDER_ROUND_ROBIN
 //basically just infinity...relying on SPECULATION_ENTRIES_MAX
@@ -141,9 +145,11 @@ class speculation{
     SyncVarEntry * entry_ended_spec;
     struct timespec tx_start_time;
     struct timespec tx_end_time;
+    struct ftracer * tracer;
     
     spec_terminate_reason_type terminated_spec_reason;
 
+    int perf_counter;
 
     void print_active_sync_objects(){
         for (int i=0;i<entries_count;i++){
@@ -206,8 +212,16 @@ class speculation{
         learning_phase=true;
 #endif
         learning_phase_count=0;
-        
         tx_count=10;
+        /*#ifdef USE_CYCLES_TICKS
+        perf_counter=perfcounterlib_open(PERF_TYPE_RAW, (0x003CULL) | (0x0000ULL));
+#else
+        perf_counter=perfcounterlib_open(PERF_TYPE_RAW, (0x0C0ULL) | (0x0000ULL));
+        #endif*/
+        /*if (tid==2){
+            tracer=ftrace_init();
+            ftrace_pid_set(tracer, getpid());
+            }*/
     }
 
 
@@ -309,21 +323,33 @@ class speculation{
             return_val=true;
         }
 
-        if (return_val==false && entries_count>3){
+        /*if (return_val==false && tx_count%100==0 && tid==2){
+            char end_message[100];
+            determ_task_clock_force_read();
+            updateTicks();
             clock_gettime(CLOCK_REALTIME, &tx_end_time);
-            //cout << "ENDING: " << ticks << " " << time_util_time_diff(&tx_start_time, &tx_end_time) << endl;
-        }
-        
-
-        /*if (return_val==false){
-            cout << "endspec " << getpid() << " " << terminated_spec_reason << " " << max_ticks << " " << ticks << " " << entries_count << " "
-                 << entry->getStats(tid)->specPercentageOfSuccess() << " " << entry->id << endl;
-        }
-        
-        if (terminated_spec_reason==SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_GLOBAL){
-            cout << "globalfail " << getpid() << " " << getPercentageOfSuccess() << " " << global_success_rate << endl;
+            unsigned long diff = time_util_time_diff(&tx_start_time, &tx_end_time);
+            sprintf(end_message, "ending-tx...%lu %lu %d", diff, ticks, seq_num);
+            ftrace_write_to_trace(tracer, end_message);
+            ftrace_off(tracer);
+            cout << "HUH???" << diff << " " << ticks << " " << ticks/diff << endl;
             }*/
+
         
+        if (return_val==false && entries_count>3){
+            long long count;
+            determ_task_clock_force_read();
+            updateTicks();
+            clock_gettime(CLOCK_REALTIME, &tx_end_time);
+            unsigned long diff = time_util_time_diff(&tx_start_time, &tx_end_time);            
+            //perfcounterlib_stop(perf_counter);
+            //perfcounterlib_read(perf_counter, &count);
+            cout << "TXENDING: " << seq_num << " " << tid << " " << ticks << " " <<
+                diff << " " << ticks/diff <<
+                " " << count << " " << determ_debug_notifying_sample_read() << endl;
+         }
+            
+
         return return_val;
     }
     
@@ -372,8 +398,14 @@ class speculation{
             start_ticks = determ_task_clock_read();
             terminated_spec_reason = SPEC_TERMINATE_REASON_NONE;
             tx_count++;
+            /*if (tx_count%100==0 && tid==2){
+                ftrace_on(tracer);
+                ftrace_write_to_trace(tracer, "starting tx");
+                }*/
             //cout << "begin " << getpid() << " " << determ_task_clock_read() << endl;
+            //perfcounterlib_start(perf_counter);
             clock_gettime(CLOCK_REALTIME, &tx_start_time);
+            
             return _checkpoint.checkpoint_begin();
         }
         else{
@@ -436,13 +468,6 @@ class speculation{
              
              entry->last_committed=logical_clock;
 
-         }
-         //cout << "commit " << getpid() << " entries: " << entries_count << " ticks: " << ticks << " max: " << max_ticks << " " << terminated_spec_reason << endl;
-         if (terminated_spec_reason==SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK){
-             /*cout << "oops: " << entry_ended_spec->id << " " <<
-                 entry_ended_spec->getStats(tid)->specPercentageOfSuccess() << " " <<
-                 entry_ended_spec->getStats(tid)->getSucceededCount() << " " <<
-                 entry_ended_spec->getStats(tid)->getFailedCount() << endl;*/
          }
          entries_count=0;
          buffered_signal=false;
