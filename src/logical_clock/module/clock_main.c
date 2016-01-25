@@ -534,6 +534,7 @@ void task_clock_entry_sleep(struct task_clock_group_info * group_info){
 
 //our thread is waking up
 void task_clock_entry_woke_up(struct task_clock_group_info * group_info){
+    current->task_clock.user_status->notifying_sample=0;
     spin_lock(&group_info->lock);    
     group_info->clocks[current->task_clock.tid].sleeping=0;
     group_info->clocks[current->task_clock.tid].waiting=0;
@@ -582,6 +583,7 @@ void task_clock_entry_stop_no_notify(struct task_clock_group_info * group_info){
 //lets start caring about the ticks we see (again)
 void task_clock_entry_start(struct task_clock_group_info * group_info){
     current->task_clock.user_status->notifying_id=0;
+    current->task_clock.user_status->notifying_sample=0;
     //the clock may have continued to run...so reset the ticks we've seen
     logical_clock_reset_current_ticks(group_info,__current_tid());
     task_clock_on_enable(group_info);
@@ -589,6 +591,7 @@ void task_clock_entry_start(struct task_clock_group_info * group_info){
 
 void task_clock_entry_start_no_notify(struct task_clock_group_info * group_info){
     group_info->clocks[current->task_clock.tid].userspace_reading=1;
+    current->task_clock.user_status->notifying_sample=0;
     //the clock may have continued to run...so reset the ticks we've seen
     logical_clock_reset_current_ticks(group_info,__current_tid());
     //now that its reset, lets set the counter to be VERY HIGH...if we get beat by an overflow its ok
