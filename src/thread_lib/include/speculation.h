@@ -15,7 +15,11 @@
 #include <determ_clock.h>
 #include <perfcounterlib.h>
 
+#ifdef USE_FTRACE_DEBUGGING
+
 #include <ftrace.h>
+#define FTRACE_FREQUENCY 100 //do an ftrace capture every N tx's
+#endif
 
 
 #ifdef TOKEN_ORDER_ROUND_ROBIN
@@ -213,15 +217,10 @@ class speculation{
 #endif
         learning_phase_count=0;
         tx_count=10;
-        /*#ifdef USE_CYCLES_TICKS
+
+#ifdef USE_DEBUG_COUNTER
         perf_counter=perfcounterlib_open(PERF_TYPE_RAW, (0x003CULL) | (0x0000ULL));
-#else
-        perf_counter=perfcounterlib_open(PERF_TYPE_RAW, (0x0C0ULL) | (0x0000ULL));
-        #endif*/
-        /*if (tid==2){
-            tracer=ftrace_init();
-            ftrace_pid_set(tracer, getpid());
-            }*/
+#endif //END USE_DEBUG_COUNTER
     }
 
 
@@ -323,17 +322,18 @@ class speculation{
             return_val=true;
         }
 
-        /*if (return_val==false && tx_count%100==0 && tid==2){
+#ifdef USE_FTRACE_DEBUGGING
+        if (return_val==false && tx_count%FTRACE_FREQUENCY==0){
             char end_message[100];
             determ_task_clock_force_read();
             updateTicks();
             clock_gettime(CLOCK_REALTIME, &tx_end_time);
             unsigned long diff = time_util_time_diff(&tx_start_time, &tx_end_time);
-            sprintf(end_message, "ending-tx...%lu %lu %d", diff, ticks, seq_num);
+            sprintf(end_message, "ending-tx...%lu %lu %d %d", diff, ticks, seq_num, getpid());
             ftrace_write_to_trace(tracer, end_message);
             ftrace_off(tracer);
-            cout << "HUH???" << diff << " " << ticks << " " << ticks/diff << endl;
-            }*/
+        }
+#endif //END FTRACE
 
         
         if (return_val==false && entries_count>3){
@@ -341,9 +341,11 @@ class speculation{
             determ_task_clock_force_read();
             updateTicks();
             clock_gettime(CLOCK_REALTIME, &tx_end_time);
-            unsigned long diff = time_util_time_diff(&tx_start_time, &tx_end_time);            
-            //perfcounterlib_stop(perf_counter);
-            //perfcounterlib_read(perf_counter, &count);
+            unsigned long diff = time_util_time_diff(&tx_start_time, &tx_end_time);
+#ifdef USE_DEBUG_COUNTER
+            perfcounterlib_stop(perf_counter);
+            perfcounterlib_read(perf_counter, &count);
+#endif
             cout << "TXENDING: " << seq_num << " " << tid << " " << ticks << " " <<
                 diff << " " << ticks/diff <<
                 " " << count << " " << determ_debug_notifying_sample_read() << endl;
@@ -398,12 +400,19 @@ class speculation{
             start_ticks = determ_task_clock_read();
             terminated_spec_reason = SPEC_TERMINATE_REASON_NONE;
             tx_count++;
-            /*if (tx_count%100==0 && tid==2){
+#ifdef USE_FTRACE_DEBUGGING
+            if (tx_count%FTRACE_FREQUENCY==0){
+                char message[100];
+                sprintf(message,"starting tx %d\n", getpid());
                 ftrace_on(tracer);
-                ftrace_write_to_trace(tracer, "starting tx");
-                }*/
-            //cout << "begin " << getpid() << " " << determ_task_clock_read() << endl;
-            //perfcounterlib_start(perf_counter);
+                ftrace_write_to_trace(tracer, message);
+            }
+#endif //ENDING FTRACE
+            
+#ifdef USE_DEBUG_COUNTER
+            perfcounterlib_start(perf_counter);
+#endif //ENDING DEBUG_COUNTER
+            
             clock_gettime(CLOCK_REALTIME, &tx_start_time);
             
             return _checkpoint.checkpoint_begin();
