@@ -221,7 +221,6 @@ void __woke_up(){
         exit(EXIT_FAILURE);
     }
     task_clock_info.disabled=0;
-    task_clock_info.user_status->lowest_clock=0;
 }
 
 int determ_debugging_is_disabled(){
@@ -241,7 +240,14 @@ int determ_task_clock_is_lowest(){
     //we are the lowest clock
     if (task_clock_info.user_status->lowest_clock){
         __woke_up();
-        return 1;
+        //check again to avoid spurious wakeups
+        if (task_clock_info.user_status->lowest_clock){
+            task_clock_info.user_status->lowest_clock=0;
+            return 1;
+        }
+        else{
+            return 0;
+        }
     }
     else{
         return 0;
@@ -265,15 +271,12 @@ int determ_task_clock_is_lowest_wait(){
         printf("\nClock wait failed\n");
         exit(EXIT_FAILURE);
     }
+ wait:
     task_clock_info.disabled=1;
-    
-    clock_gettime(CLOCK_REALTIME, &t1);
     int spin_counter=0;
     while(!task_clock_info.user_status->lowest_clock && spin_counter<MAX_SPIN_INT){
         ++spin_counter;
     }
-    clock_gettime(CLOCK_REALTIME, &t2);
-
     if (!task_clock_info.user_status->lowest_clock){
         if ( ioctl(task_clock_info.perf_counter.fd, PERF_EVENT_IOC_TASK_CLOCK_SLEEP, 0) != 0){
             printf("\nClock wait failed\n");
@@ -288,13 +291,13 @@ int determ_task_clock_is_lowest_wait(){
             poll(&fds, 1, -1);
         }
     }
-
-    if ( ioctl(task_clock_info.perf_counter.fd, PERF_EVENT_IOC_TASK_CLOCK_WOKE_UP, 0) != 0){
-        printf("\nClock wakeup failed\n");
-        exit(EXIT_FAILURE);
+    __woke_up();
+    //if we aren't the lowest its a spurious wakeup and we need to go back
+    if (!task_clock_info.user_status->lowest_clock){
+        goto wait;
     }
-
-    __woke_up(); 
+    
+    task_clock_info.user_status->lowest_clock=0;
     return polled;
 }
 

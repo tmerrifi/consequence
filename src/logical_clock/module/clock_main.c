@@ -457,7 +457,6 @@ void task_clock_entry_activate(struct task_clock_group_info * group_info){
   //__update_period(group_info);
   logical_clock_update_overflow_period(group_info, __current_tid());
   current->task_clock.user_status->notifying_id=0;
-  current->task_clock.user_status->notifying_clock=666;
   current->task_clock.user_status->notifying_sample=666;
   current->task_clock.user_status->hit_bounded_fence=0;
 
@@ -534,11 +533,20 @@ void task_clock_entry_sleep(struct task_clock_group_info * group_info){
 
 //our thread is waking up
 void task_clock_entry_woke_up(struct task_clock_group_info * group_info){
+    int lowest_tid=-1;
     current->task_clock.user_status->notifying_sample=0;
     spin_lock(&group_info->lock);    
     group_info->clocks[current->task_clock.tid].sleeping=0;
     group_info->clocks[current->task_clock.tid].waiting=0;
+    lowest_tid=__search_for_lowest(group_info);
     spin_unlock(&group_info->lock);
+    if (lowest_tid==current->task_clock.tid){
+        current->task_clock.user_status->lowest_clock=1;
+    }
+    else{
+        current->task_clock.user_status->lowest_clock=0;
+    }
+    
 }
 
 //Called when the counting has finished...we don't actually stop counting, we just
