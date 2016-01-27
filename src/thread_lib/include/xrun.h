@@ -851,6 +851,11 @@ public:
         if ((!isSingleActiveThread && !_token_holding) || failure_count>0) {
             waitToken();
         }
+        else{
+            //we need to update the last token acquisition time to our current logical clock, even though we don't actually
+            //grab the token
+            _last_token_release_time=determ_task_clock_read();
+        }
 
         //even if we are using coarsening, we may need to update before we hold on to the token and keep going
         //***this needs to happen AFTER we get the token
@@ -1031,6 +1036,9 @@ public:
       if (!isSingleActiveThread && !_token_holding){
           //get the token
           waitToken();
+      }
+      else{
+          _last_token_release_time=determ_task_clock_read();
       }
 
       int wasSpeculating=endSpeculation();
