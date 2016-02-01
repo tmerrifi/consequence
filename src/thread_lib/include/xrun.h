@@ -864,13 +864,13 @@ public:
 
         //in the event that we were speculating lets do an update, release the token and try to speculate again
         if (wasSpeculating=endSpeculation()){
-            commitAndUpdateMemoryParallelBegin();
             int locks_elided_tmp=_speculation->getEntriesCount();
             locks_elided+=locks_elided_tmp;
             //DEBUG_TYPE_SPECULATIVE_COMMIT
             determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_COMMIT, (void *)locks_elided_tmp);  
             _speculation->commitSpeculation(get_ticks_for_speculation());
             xmemory::end_speculation();
+            commitAndUpdateMemoryParallelBegin();
             putToken();
             commitAndUpdateMemoryParallelEnd();
             isSpeculating=false;
@@ -1322,6 +1322,7 @@ public:
 
 
   static void commitAndUpdateMemory(){
+      assert(!_speculation->isSpeculating());
       commitAndUpdateMemory(NULL);
   }
 
@@ -1338,12 +1339,14 @@ public:
     }
 
     static void commitAndUpdateMemory(struct local_copy_stats * stats){
+        assert(!_speculation->isSpeculating());
         determ::getInstance().commitInSerial(_thread_index,stats);
     }
 
     /***PARALLEL COMMIT FUNCTIONS***/
     
     static void commitAndUpdateMemoryParallelBegin(){
+        assert(!_speculation->isSpeculating());
 #ifdef DISABLE_PARALLEL_COMMITS
         commitAndUpdateMemory();
 #else
@@ -1351,6 +1354,7 @@ public:
 #endif
     }
     static void commitAndUpdateMemoryParallelBegin(struct local_copy_stats * stats){
+        assert(!_speculation->isSpeculating());
 #ifdef DISABLE_PARALLEL_COMMITS
         commitAndUpdateMemory(stats);
 #else
@@ -1358,14 +1362,15 @@ public:
 #endif
     }
     static void commitAndUpdateMemoryParallelEnd(){
+        assert(!_speculation->isSpeculating());
 #ifdef DISABLE_PARALLEL_COMMITS
         
 #else
         commitAndUpdateMemoryParallelEnd(NULL);
-
 #endif
     }
     static void commitAndUpdateMemoryParallelEnd(struct local_copy_stats * stats){
+        assert(!_speculation->isSpeculating());
 #ifdef DISABLE_PARALLEL_COMMITS
 
 #else
