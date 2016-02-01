@@ -28,6 +28,7 @@ class debug_user_memory{
     }
 
     void add(uint32_t * mem, char * message, int length, int seq_num){
+#ifdef DEBUG_USER_MEMORY_ON
         if (entries_count < MAX_DEBUG_ENTRIES){
             memcpy(entries[entries_count].memory, mem, ((length < MAX_MEM_ENTRIES) ? length : MAX_MEM_ENTRIES)*sizeof(uint32_t) );
             entries[entries_count].length=(length < MAX_MEM_ENTRIES) ? length : MAX_MEM_ENTRIES;
@@ -36,9 +37,11 @@ class debug_user_memory{
             entries[entries_count].clock=determ_task_clock_read();
             entries_count++;
         }
+#endif
     }
 
     void print(){
+#ifdef DEBUG_USER_MEMORY_ON
         for (int i=0;i<entries_count;i++){
             cout << "ENTRY tid: " << tid << " seq: " << entries[i].seq_num << " clock: " << entries[i].clock << " " << entries[i].message << "  mem: ";
             for (int j=0;j<entries[i].length;j++){
@@ -46,6 +49,7 @@ class debug_user_memory{
             }
             cout << endl;
         }
+#endif
     }
     
  private:
