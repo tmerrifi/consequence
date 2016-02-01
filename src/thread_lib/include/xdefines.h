@@ -61,7 +61,7 @@ public:
     enum { STACK_SIZE = (1048576UL * 100) } ; // 1 * 1048576 };
   enum { PROTECTEDHEAP_CHUNK = 10485760 };
   
-  enum { MAX_GLOBALS_SIZE = 1048576UL * 20 };
+  enum { MAX_GLOBALS_SIZE = 1048576UL * 2000 };
   enum { INTERNALHEAP_SIZE = 1048576UL * 2000 }; // FIXME 10M 
   enum { PageSize = 4096UL };
   enum { PAGE_SIZE_MASK = (PageSize-1) };
