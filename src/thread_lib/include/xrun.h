@@ -51,11 +51,15 @@
 #include "thread_pool.h"
 #include "conseq_malloc.h"
 #include "speculation.h"
+#include "debug_user_memory.h"
 #include <sys/resource.h>
 #include <determ_clock.h>
 #include <signal.h>
 
 #define MAX_SLEEP_COUNT 10
+
+#define DEBUG_STACK_ADDRESS 0xffffea20
+#define DEBUG_ARRAY_ADDRESS 0x80a8090
 
 class xrun {
 
@@ -107,6 +111,7 @@ private:
 
     static size_t monitor_address;
 
+    static debug_user_memory * debug_mem;
     
 public:
 
@@ -115,6 +120,8 @@ public:
 
     void* buf = mmap(NULL, sizeof(speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     _speculation = new (buf) speculation(0);
+    buf = mmap(NULL, sizeof(debug_user_memory), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    debug_mem = new (buf) debug_user_memory(0);
     alive=false;
     reverts=0;
     spec_dirty_count=0;
@@ -308,6 +315,8 @@ public:
     void* buf = mmap(NULL, sizeof(_speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     _speculation = new (_speculation) speculation(_thread_index);
     
+    debug_mem = new (debug_mem) debug_user_memory(_thread_index);
+    
     xmemory::wake();
 #ifdef USE_TAGGING
         xmemory::set_local_version_tag(0xDEAD);
@@ -322,6 +331,8 @@ public:
     #endif
     commitAndUpdateMemory();
     putToken();
+    debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), " register array ", 8, determ::getInstance().getSeqNum() );
+              
     determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
     return (_thread_index);
   }
@@ -335,6 +346,12 @@ public:
 #endif
       waitToken();
       commitAndUpdateMemoryTerminateSpeculation();
+
+      //debug_mem->add((uint32_t *)(DEBUG_STACK_ADDRESS), "deregister loopvar ", 1);
+      debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "deregister array ", 8, determ::getInstance().getSeqNum());
+
+      debug_mem->print();
+
       
       if (determ::getInstance().is_master_thread_finisehd()){
           ThreadPool::getInstance().set_exit_by_id(_thread_index);
@@ -663,6 +680,11 @@ public:
               tx_monitor_next=false;
           }
       }
+
+      int lastToken=determ::getInstance().getLastTokenPutter();
+      debug_mem->add((uint32_t *)&lastToken, " last token holder ", 1, determ::getInstance().getSeqNum());
+      debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), " got token ", 8, determ::getInstance().getSeqNum());
+      
       return spin_counter;
   }
 
@@ -778,10 +800,10 @@ public:
 
         //should we use the tx coarsening?
         bool isUsingTxCoarsening= !isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
-#ifdef DTHREADS_TASKCLOCK_DEBUG
+        //#ifdef DTHREADS_TASKCLOCK_DEBUG
         cout << "LOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read()
-             << " pid " << getpid() << " lockcount " << _lock_count << " m: " << mutex << endl;
-#endif
+             << " tid " << _thread_index << " lockcount " << _lock_count << " m: " << mutex << endl;
+        //#endif
     retry:
 
         //if we are using kendo, we have to keep retrying and incrementing
@@ -821,6 +843,7 @@ public:
 #else
                 determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK+dirty_pages_ticks);
 #endif
+                debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "SPEC lock array ", 8, determ::getInstance().getSeqNum());
                 return;
             }
             else{
@@ -829,6 +852,11 @@ public:
                 //we just got back from a rolled back speculation
                 determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_FAILED_SPECULATION, (void *)id);
                 reverts++;
+
+
+                //debug_mem->add((uint32_t *)(DEBUG_STACK_ADDRESS), "after revert loopvar ", 1);
+                debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "after revert array ", 8, determ::getInstance().getSeqNum());
+                
             }
         }
 #ifdef EVENT_VIEWER
@@ -846,6 +874,10 @@ public:
         if (isSpeculating){
             stopClock(0,true);
         }
+
+        //debug_mem->add((uint32_t *)(DEBUG_STACK_ADDRESS), "before lock commit loopvar ", 1);
+        debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "before lock commit array ", 8, determ::getInstance().getSeqNum());
+
         
         //get the token, assuming its not just us and we don't already own it
         if ((!isSingleActiveThread && !_token_holding) || failure_count>0) {
@@ -936,6 +968,8 @@ public:
             commitAndUpdateMemoryParallelEnd();
         }
 
+        debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "after lock commit array ", 8, determ::getInstance().getSeqNum());
+        
     }
 
     static void mutex_lock(pthread_mutex_t * mutex) {
@@ -958,8 +992,8 @@ public:
 #endif
         __mutex_lock_inner(mutex, true /*allow coarseing?*/);
 #ifdef DTHREADS_TASKCLOCK_DEBUG
-        cout << "mutex lock " << _thread_index << " " << determ_task_clock_read() << " pid " << getpid() << endl;
-#endif        
+        cout << "mutex lock " << _thread_index << " " << determ_task_clock_read() << " pid " << getpid() << " " << mutex << endl;
+#endif
         //**************DEBUG CODE**************
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
         //*************END DEBUG CODE*********************
@@ -1003,6 +1037,12 @@ public:
       
       assert(_lock_count>0);
       _lock_count--;
+
+      cout << "UNLOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read()
+             << " tid " << _thread_index << " lockcount " << _lock_count << " m: " << mutex << endl;
+
+      
+      
       
       if (isSpeculating){
           //_speculation->updateTicks();
@@ -1025,6 +1065,7 @@ public:
 #else
           determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK+dirty_pages_ticks);
 #endif
+          debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "SPEC unlock array ", 8, determ::getInstance().getSeqNum());
           return;
       }
 
@@ -1040,6 +1081,9 @@ public:
       else{
           _last_token_release_time=determ_task_clock_read();
       }
+
+      //debug_mem->add((uint32_t *)(DEBUG_STACK_ADDRESS), "before unlock commit loopvar ", 1);
+      debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "before unlock commit array ", 8, determ::getInstance().getSeqNum());
 
       int wasSpeculating=endSpeculation();
 
@@ -1064,6 +1108,10 @@ public:
           finishCommit=true;
           determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_COMMIT);
       }
+
+      //debug_mem->add((uint32_t *)(DEBUG_STACK_ADDRESS), "after unlock commit loopvar ", 1);
+
+
       //**************DEBUG CODE**************
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
       //*************END DEBUG CODE*********************
@@ -1100,6 +1148,8 @@ public:
 #ifdef USE_TAGGING
       xmemory::set_local_version_tag(0);
 #endif
+
+      debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "after unlock commit array ", 8, determ::getInstance().getSeqNum());
       //*****DEBUG CODE************************/
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
       //******************************************/
