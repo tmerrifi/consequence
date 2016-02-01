@@ -9,6 +9,7 @@ class SyncVarEntry{
 public:
    int id;
    uint64_t last_committed;
+   uint16_t committed_by;
    syncStats * stats;
 
    syncStats * getStats(int tid){

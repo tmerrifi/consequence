@@ -641,8 +641,12 @@ public:
         int64_t clockDiff, clockDiffReturn;
         clockDiffReturn=0;
 #ifdef FAST_FORWARD
-        //if the token's clock is greater than ours
-        u_int64_t lastClock = determ::getInstance().getLastTokenClock();
+        //if the token's clock is greater than ours.
+        //we add one to ensure we avoid the situation where we wakeup a thread with a lower id
+        //and it gets the same logical clock as the previous thread. So now it has the same clock
+        //and a lower id. This may mess up our speculation which assumes a monotonically increasing
+        //clock w.r.t token acquisition
+        u_int64_t lastClock = determ::getInstance().getLastTokenClock() + 1;
         //get the difference between the last token holder's clock and our clock
         clockDiff = lastClock - determ_task_clock_read();
         if (clockDiff > 0){

@@ -170,6 +170,11 @@ class speculation{
         }
     }
 
+
+    inline bool __last_committed_is_larger(SyncVarEntry * entry, uint64_t clock, int tid){
+        return (entry->last_committed > clock ||
+                entry->last_committed==clock && entry->committed_by != tid);
+    }
     
      bool verify_synchronization(){
          int r = rand();
@@ -178,7 +183,7 @@ class speculation{
             //its possible that a lock was acquired prior to the start of our speculation, and yet still held. In that case, we will see that the "last_committed" field
             //is less than our start time. Therefore, we need to verify that the lock is not currently held "for real."
             bool lockHeld = (entries[i].type==SPEC_ENTRY_LOCK) ? ((LockEntry *)entry)->is_acquired : false;
-            if (entry->last_committed > logical_clock_start || lockHeld){
+            if (__last_committed_is_larger(entry, logical_clock_start, tid) || lockHeld){
                 //this entry caused us to fail...update its stats
                 failure_count++;
                 /*cout << " endspec failed entry " << getpid() << " " << entry->id << " " << entry->getStats(tid)->specPercentageOfSuccess() << " "
@@ -189,7 +194,7 @@ class speculation{
                 return false;
             }
             else{
-                //cout << "verified tid: " << tid << " " << entry << " " << entry->last_committed << " " << logical_clock_start << endl;
+                cout << "verified tid: " << tid << " " << entry << " " << entry->last_committed << " " << logical_clock_start << endl;
                 update_global_success_rate(true);
                 entry->getStats(tid)->specSucceeded();
             }
@@ -480,7 +485,8 @@ class speculation{
              }
              
              entry->last_committed=logical_clock;
-             //cout << "committing tid: " << tid << " " << entry << " " << logical_clock << endl;
+             entry->committed_by=tid;
+             cout << "committing tid: " << tid << " " << entry << " " << logical_clock << endl;
 
          }
          entries_count=0;
@@ -498,8 +504,9 @@ class speculation{
      void updateLastCommittedTime(void * entry_ptr, uint64_t logical_clock){
         SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
         entry->last_committed=logical_clock;
+        entry->committed_by=tid;
         seq_num++;
-        //cout << "updatelastcomm tid: " << tid << " " << entry << " " << logical_clock << endl;
+        cout << "updatelastcomm tid: " << tid << " " << entry << " " << logical_clock << endl;
 
      }
 
