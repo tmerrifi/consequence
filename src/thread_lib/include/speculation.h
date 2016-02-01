@@ -194,7 +194,7 @@ class speculation{
                 return false;
             }
             else{
-                cout << "verified tid: " << tid << " " << entry << " " << entry->last_committed << " " << logical_clock_start << endl;
+                //cout << "verified tid: " << tid << " " << entry << " " << entry->last_committed << " " << logical_clock_start << endl;
                 update_global_success_rate(true);
                 entry->getStats(tid)->specSucceeded();
             }
@@ -486,7 +486,7 @@ class speculation{
              
              entry->last_committed=logical_clock;
              entry->committed_by=tid;
-             cout << "committing tid: " << tid << " " << entry << " " << logical_clock << endl;
+             //cout << "committing tid: " << tid << " " << entry << " " << logical_clock << endl;
 
          }
          entries_count=0;
@@ -506,7 +506,7 @@ class speculation{
         entry->last_committed=logical_clock;
         entry->committed_by=tid;
         seq_num++;
-        cout << "updatelastcomm tid: " << tid << " " << entry << " " << logical_clock << endl;
+        //cout << "updatelastcomm tid: " << tid << " " << entry << " " << logical_clock << endl;
 
      }
 
