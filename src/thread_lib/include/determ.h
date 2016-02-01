@@ -365,6 +365,8 @@ private:
   volatile uint64_t last_committed_heap_version;
 
   volatile uint64_t token_acq_count;
+
+  volatile int seq_num;
   
  determ():
   _condnum(0),
@@ -382,7 +384,8 @@ private:
       _childregistered(false),
       master_thread_finished(false),
       variable_counter(0),
-      token_acq_count(0)
+      token_acq_count(0),
+      seq_num(0)
           {  }
   
 public:
@@ -765,8 +768,7 @@ public:
 
 
     _last_getter=threadindex;
-
-
+    seq_num++;
     end_thread_event(threadindex, DEBUG_TYPE_TOKEN_WAIT);
 
 #ifdef DTHREADS_TASKCLOCK_DEBUG
@@ -840,7 +842,10 @@ public:
 #endif
     }
 
-
+  int getSeqNum(){
+      return seq_num;
+  }
+  
   int getLastTokenPutter(){
       return _last_putter;
   }
