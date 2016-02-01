@@ -1,4 +1,5 @@
 #include "speculation.h"
+#include "debug_user_memory.h"
 #include "xrun.h"
 
 size_t xrun::_master_thread_id;
@@ -28,3 +29,4 @@ int xrun::characterize_barrier_wait;
 /*DEBUGGING*/
 size_t xrun::monitor_address;
 /***********/
+debug_user_memory * xrun::debug_mem;
