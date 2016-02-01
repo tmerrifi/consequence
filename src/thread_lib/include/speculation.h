@@ -189,6 +189,7 @@ class speculation{
                 return false;
             }
             else{
+                //cout << "verified tid: " << tid << " " << entry << " " << entry->last_committed << " " << logical_clock_start << endl;
                 update_global_success_rate(true);
                 entry->getStats(tid)->specSucceeded();
             }
@@ -349,9 +350,9 @@ class speculation{
             perfcounterlib_stop(perf_counter);
             perfcounterlib_read(perf_counter, &count);
 #endif
-            cout << "TXENDING: " << seq_num << " " << tid << " " << ticks << " " <<
+            /*cout << "TXENDING: " << seq_num << " " << tid << " " << ticks << " " <<
                 diff << " " << ticks/diff <<
-                " " << count << " " << determ_debug_notifying_sample_read() << endl;
+                " " << count << " " << determ_debug_notifying_sample_read() << endl;*/
          }
             
 
@@ -436,7 +437,7 @@ class speculation{
             return 0;
         }
         else if (!verify_synchronization() || active_speculative_entries > 0){
-            //cout << " failed " << getpid() << " " << entries_count << " " << max_ticks << endl;
+            //cout << " failed tid " << tid << endl;
             adaptSpeculation(false);
             entries_count=0;
             ticks=0;
@@ -479,6 +480,7 @@ class speculation{
              }
              
              entry->last_committed=logical_clock;
+             //cout << "committing tid: " << tid << " " << entry << " " << logical_clock << endl;
 
          }
          entries_count=0;
@@ -497,6 +499,8 @@ class speculation{
         SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
         entry->last_committed=logical_clock;
         seq_num++;
+        //cout << "updatelastcomm tid: " << tid << " " << entry << " " << logical_clock << endl;
+
      }
 
      int getActiveEntriesCount(){
