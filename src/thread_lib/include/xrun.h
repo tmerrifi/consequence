@@ -484,10 +484,10 @@ public:
 
     commitAndUpdateMemory();
 
-    //#ifdef PRINT_SCHEDULE
+#ifdef PRINT_SCHEDULE
     cout << "SCHED: FINISHED JOIN - tid: " << _thread_index << " target " << child_threadindex << endl;
     fflush(stdout);
-    //#endif
+#endif
 
     
     // Release the token.
@@ -804,10 +804,10 @@ public:
 
         //should we use the tx coarsening?
         bool isUsingTxCoarsening= !isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
-        //#ifdef DTHREADS_TASKCLOCK_DEBUG
+#ifdef DTHREADS_TASKCLOCK_DEBUG
         cout << "LOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read()
              << " tid " << _thread_index << " lockcount " << _lock_count << " m: " << mutex << endl;
-        //#endif
+#endif
     retry:
 
         //if we are using kendo, we have to keep retrying and incrementing
@@ -1041,13 +1041,10 @@ public:
       
       assert(_lock_count>0);
       _lock_count--;
-
+#ifdef DTHREADS_TASKCLOCK_DEBUG
       cout << "UNLOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read()
              << " tid " << _thread_index << " lockcount " << _lock_count << " m: " << mutex << endl;
-
-      
-      
-      
+#endif
       if (isSpeculating){
           //_speculation->updateTicks();
           //we want to notify the speculation engine that we have released this lock
@@ -1269,11 +1266,9 @@ public:
                       spec_dirty_count=0;
                       xmemory::begin_speculation();
                       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
-                      cout << "starting spec here " << _lock_count << endl;
                       startClock(true);
                   }
                   else{
-                      //cout << "here???? " << endl;
                       startClock();
                   }
                   return;
