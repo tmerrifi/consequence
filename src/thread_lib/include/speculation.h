@@ -175,7 +175,10 @@ class speculation{
          int r = rand();
          for (int i=0;i<entries_count;i++){
             SyncVarEntry * entry = entries[i].entry;
-            if (entry->last_committed > logical_clock_start){
+            //its possible that a lock was acquired prior to the start of our speculation, and yet still held. In that case, we will see that the "last_committed" field
+            //is less than our start time. Therefore, we need to verify that the lock is not currently held "for real."
+            bool lockHeld = (entries[i].type==SPEC_ENTRY_LOCK) ? ((LockEntry *)entry)->is_acquired : false;
+            if (entry->last_committed > logical_clock_start || lockHeld){
                 //this entry caused us to fail...update its stats
                 failure_count++;
                 /*cout << " endspec failed entry " << getpid() << " " << entry->id << " " << entry->getStats(tid)->specPercentageOfSuccess() << " "
