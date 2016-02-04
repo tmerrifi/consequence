@@ -331,7 +331,6 @@ public:
     #endif
     commitAndUpdateMemory();
     putToken();
-    debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), " register array ", 8, determ::getInstance().getSeqNum() );
               
     determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
     return (_thread_index);
@@ -347,11 +346,7 @@ public:
       waitToken();
       commitAndUpdateMemoryTerminateSpeculation();
 
-      //debug_mem->add((uint32_t *)(DEBUG_STACK_ADDRESS), "deregister loopvar ", 1);
-      debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "deregister array ", 8, determ::getInstance().getSeqNum());
-
       debug_mem->print();
-
       
       if (determ::getInstance().is_master_thread_finisehd()){
           ThreadPool::getInstance().set_exit_by_id(_thread_index);
@@ -686,9 +681,6 @@ public:
       }
 
       int lastToken=determ::getInstance().getLastTokenPutter();
-      debug_mem->add((uint32_t *)&lastToken, " last token holder ", 1, determ::getInstance().getSeqNum());
-      debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), " got token ", 8, determ::getInstance().getSeqNum());
-      
       return spin_counter;
   }
 
@@ -847,7 +839,6 @@ public:
 #else
                 determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK+dirty_pages_ticks);
 #endif
-                debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "SPEC lock array ", 8, determ::getInstance().getSeqNum());
                 return;
             }
             else{
@@ -857,10 +848,6 @@ public:
                 determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_FAILED_SPECULATION, (void *)id);
                 reverts++;
 
-
-                //debug_mem->add((uint32_t *)(DEBUG_STACK_ADDRESS), "after revert loopvar ", 1);
-                debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "after revert array ", 8, determ::getInstance().getSeqNum());
-                
             }
         }
 #ifdef EVENT_VIEWER
@@ -879,10 +866,6 @@ public:
             stopClock(0,true);
         }
 
-        //debug_mem->add((uint32_t *)(DEBUG_STACK_ADDRESS), "before lock commit loopvar ", 1);
-        debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "before lock commit array ", 8, determ::getInstance().getSeqNum());
-
-        
         //get the token, assuming its not just us and we don't already own it
         if ((!isSingleActiveThread && !_token_holding) || failure_count>0) {
             waitToken();
@@ -972,8 +955,6 @@ public:
             commitAndUpdateMemoryParallelEnd();
         }
 
-        debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "after lock commit array ", 8, determ::getInstance().getSeqNum());
-        
     }
 
     static void mutex_lock(pthread_mutex_t * mutex) {
@@ -1066,7 +1047,6 @@ public:
 #else
           determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK+dirty_pages_ticks);
 #endif
-          debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "SPEC unlock array ", 8, determ::getInstance().getSeqNum());
           return;
       }
 
@@ -1082,9 +1062,6 @@ public:
       else{
           _last_token_release_time=determ_task_clock_read();
       }
-
-      //debug_mem->add((uint32_t *)(DEBUG_STACK_ADDRESS), "before unlock commit loopvar ", 1);
-      debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "before unlock commit array ", 8, determ::getInstance().getSeqNum());
 
       int wasSpeculating=endSpeculation();
 
@@ -1109,9 +1086,6 @@ public:
           finishCommit=true;
           determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_COMMIT);
       }
-
-      //debug_mem->add((uint32_t *)(DEBUG_STACK_ADDRESS), "after unlock commit loopvar ", 1);
-
 
       //**************DEBUG CODE**************
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
@@ -1150,7 +1124,6 @@ public:
       xmemory::set_local_version_tag(0);
 #endif
 
-      debug_mem->add((uint32_t *)(DEBUG_ARRAY_ADDRESS), "after unlock commit array ", 8, determ::getInstance().getSeqNum());
       //*****DEBUG CODE************************/
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
       //******************************************/
