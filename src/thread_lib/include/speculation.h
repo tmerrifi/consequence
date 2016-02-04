@@ -16,7 +16,6 @@
 #include <perfcounterlib.h>
 
 #ifdef USE_FTRACE_DEBUGGING
-
 #include <ftrace.h>
 #define FTRACE_FREQUENCY 100 //do an ftrace capture every N tx's
 #endif
@@ -149,7 +148,9 @@ class speculation{
     SyncVarEntry * entry_ended_spec;
     struct timespec tx_start_time;
     struct timespec tx_end_time;
+#ifdef USE_FTRACE_DEBUGGING
     struct ftracer * tracer;
+#endif
     
     spec_terminate_reason_type terminated_spec_reason;
 
@@ -226,7 +227,10 @@ class speculation{
 #endif
         learning_phase_count=0;
         tx_count=10;
-
+#ifdef USE_FTRACE_DEBUGGING
+        tracer = ftrace_init();
+#endif
+        
 #ifdef USE_DEBUG_COUNTER
         perf_counter=perfcounterlib_open(PERF_TYPE_RAW, (0x003CULL) | (0x0000ULL));
 #endif //END USE_DEBUG_COUNTER
