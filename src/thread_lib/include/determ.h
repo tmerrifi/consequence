@@ -67,6 +67,8 @@
 #define MAX_EVENTS 0
 #endif
 
+#define EVENT_VIEWER_LITE
+
 //#define fprintf(...) 
 
 #define BARRIER_TOKEN_HELD_FLAG (1<<20)
@@ -159,9 +161,9 @@ private:
               this->events[this->event_counter].end_clock=determ_task_clock_read();
               this->events[this->event_counter].coarsening_counter=determ_task_clock_get_coarsened_ticks();
               this->events[this->event_counter].perf_counter_last=determ_task_clock_last_raw_perf();
-              this->events[this->event_counter].perf_counter_current=determ_task_clock_current_raw_perf();
-              this->events[this->event_counter].cpu=cpu;
-              this->events[this->event_counter].period_sets=determ_task_clock_period_sets();              
+              this->events[this->event_counter].perf_counter_current=determ_debug_notifying_diff_read();
+              this->events[this->event_counter].cpu=determ_debug_notifying_id_read();
+              this->events[this->event_counter].period_sets=determ_debug_notifying_clock_read();       
               ++this->event_counter;
           }        
 #endif
@@ -189,6 +191,9 @@ private:
             this->events[this->event_counter].begin_clock=determ_task_clock_read();
             this->events[this->event_counter].end_clock=determ_task_clock_read();
             this->events[this->event_counter].sync_object=sync_object;
+            this->events[this->event_counter].cpu=determ_debug_notifying_id_read();
+            this->events[this->event_counter].period_sets=determ_debug_notifying_clock_read();
+            this->events[this->event_counter].perf_counter_current=determ_debug_notifying_diff_read();
             ++this->event_counter;
         }        
 #endif
@@ -217,7 +222,7 @@ private:
                    << " " << this->events[i].partial_pages << " " << this->events[i].merged_pages << " " 
                    << this->events[i].sync_object << " " << this->events[i].coarsening_counter << " " 
                    << this->events[i].coarsening_level << " " << this->events[i].perf_counter_current << " " 
-                   << this->events[i].perf_counter_last << " " << this->events[i].cpu << " " << determ_task_clock_period_sets() << endl;
+                   << this->events[i].perf_counter_last << " " << this->events[i].cpu << " " << this->events[i].period_sets << endl;
           }
 #endif
       }
@@ -233,7 +238,7 @@ private:
                    << " " << this->events[i].partial_pages << " " << this->events[i].merged_pages << " " 
                    << this->events[i].sync_object << " " << this->events[i].coarsening_counter << " " 
                    << this->events[i].coarsening_level << " " << this->events[i].perf_counter_current << " " 
-                   << this->events[i].perf_counter_last << " " << this->events[i].cpu << " " << determ_task_clock_period_sets() << endl;
+                   << this->events[i].perf_counter_last << " " << this->events[i].cpu << " " << this->events[i].period_sets << endl;
           }
 #endif
       }
@@ -515,7 +520,7 @@ public:
   }
   
   inline void add_event_commit_stats(int threadindex, int updated_pages, int merged_pages, int partial_updated_pages, int dirty_pages){        
-#ifdef EVENT_VIEWER
+#if defined(EVENT_VIEWER) && !defined(EVENT_VIEWER_LITE)
       EventEntry * entry = &_event_entries[threadindex];
       entry->add_event_commit_stats(updated_pages, merged_pages, partial_updated_pages, dirty_pages);
 #endif
@@ -523,28 +528,49 @@ public:
 
   inline void start_thread_event(int threadindex, int event_type, void * sync_object){
 #ifdef EVENT_VIEWER
-      EventEntry * entry = &_event_entries[threadindex];
-      entry->start_event(event_type, &init_time, sync_object);
-#endif
+#ifdef EVENT_VIEWER_LITE
+      if (event_type==DEBUG_TYPE_WAIT_LOWEST || event_type==DEBUG_TYPE_TX_START ||
+          event_type==DEBUG_TYPE_TX_ENDING){
+#else
+          if (true){
+#endif //end EVENT_VIEWER_LITE
+              EventEntry * entry = &_event_entries[threadindex];
+              entry->start_event(event_type, &init_time, sync_object);
+          }
+#endif //end EVENT VIEWER
   }
 
   inline void end_thread_event(int threadindex, int event_type){
 #ifdef EVENT_VIEWER
-      EventEntry * entry = &_event_entries[threadindex];
-      entry->end_event(event_type, &init_time, threadindex);
+#ifdef EVENT_VIEWER_LITE
+      if (event_type==DEBUG_TYPE_WAIT_LOWEST || event_type==DEBUG_TYPE_TX_START ||
+          event_type==DEBUG_TYPE_TX_ENDING){
+#else
+          if (true){
+#endif //end EVENT_VIEWER_LITE
+              EventEntry * entry = &_event_entries[threadindex];
+              entry->end_event(event_type, &init_time, threadindex);
+          }
 #endif
   }
 
   void add_atomic_event(int threadindex, int event_type, void * sync_object){
 #ifdef EVENT_VIEWER
-      EventEntry * entry = &_event_entries[threadindex];
-      entry->add_atomic_event(event_type, &init_time, sync_object);
-#endif
+#ifdef EVENT_VIEWER_LITE
+      if (event_type==DEBUG_TYPE_WAIT_LOWEST || event_type==DEBUG_TYPE_TX_START ||
+          event_type==DEBUG_TYPE_TX_ENDING){
+#else
+          if (true){
+#endif //end EVENT_VIEWER_LITE
+              EventEntry * entry = &_event_entries[threadindex];
+              entry->add_atomic_event(event_type, &init_time, sync_object);
+          }
+#endif //end EVENT VIEWER
   }
 
 
   void add_coarsening_stats(int threadindex, int coarsening_counter, int coarsening_level, bool successful, uint64_t perf_counter){
-#ifdef EVENT_VIEWER
+#if defined(EVENT_VIEWER) && !defined(EVENT_VIEWER_LITE)
       start_thread_event(threadindex, (successful) ? DEBUG_TYPE_TX_COARSE_SUCCESS : DEBUG_TYPE_TX_COARSE_FAILED, NULL);
       EventEntry * entry = &_event_entries[threadindex];
       entry->add_coarsening_stats(coarsening_counter, coarsening_level, perf_counter);
