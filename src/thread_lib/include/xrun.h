@@ -654,6 +654,7 @@ public:
     static int waitToken(void) {
       struct timespec t1,t2;
       int spin_counter=0;
+
       if (!_token_holding){
           token_acq++;
 #ifdef TRACK_LIBRARY_CYCLES
@@ -846,7 +847,6 @@ public:
         //the clock has been running this whole time...lets stop it before we try to grab the token (nondeterministic)
         if (isSpeculating){
             stopClock(0,true);
-            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_TX_ENDING, NULL);  
         }
 
         //get the token, assuming its not just us and we don't already own it
@@ -1046,10 +1046,6 @@ public:
           _last_token_release_time=determ_task_clock_read();
       }
 
-      int wasSpeculating=endSpeculation();
-
-      //if (determ::getInstance().lock_is_current_owner(mutex, _thread_index)){
-      
       //even if we are using coarsening, we may need to update before we hold on to the token and keep going
       //***this needs to happen AFTER we get the token*******
       bool shouldUpdate=(_thread_index!=determ::getInstance().getLastTokenPutter());
@@ -1085,23 +1081,13 @@ public:
       fflush(stdout);
 #endif
 
-      if (wasSpeculating){
-          locks_elided+=_speculation->getEntriesCount();
-          _speculation->commitSpeculation(get_ticks_for_speculation());
-          xmemory::end_speculation();
-      }
-      else{
-          _speculation->updateLastCommittedTime(mutex,get_ticks_for_speculation());
-      }
+
+      _speculation->updateLastCommittedTime(mutex,get_ticks_for_speculation());
+
 
       if (!isSingleActiveThread && !isUsingTxCoarsening){
           //release the token
           putToken();
-#ifdef EVENT_VIEWER
-          if (wasSpeculating){
-              determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_TX_ENDING, NULL);
-          }
-#endif
       }
 
       if (finishCommit){
@@ -1344,7 +1330,6 @@ public:
             locks_elided+=_speculation->getEntriesCount();
             _speculation->commitSpeculation(get_ticks_for_speculation());
             xmemory::end_speculation();
-            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_TX_ENDING, NULL);
         }
         commitAndUpdateMemory();
     }
