@@ -160,8 +160,11 @@ void task_clock_overflow_handler(struct task_clock_group_info * group_info, stru
 
   new_low=__new_lowest(group_info, current->task_clock.tid);
   
-  if (new_low >= 0 && new_low != current->task_clock.tid && group_info->nmi_new_low==0){
-#if defined(DEBUG_TASK_CLOCK_COARSE_GRAINED)
+  if (new_low >= 0 && new_low != current->task_clock.tid){
+      group_info->user_status_arr[new_low].lowest_clock=1;
+  }
+
+  /*#if defined(DEBUG_TASK_CLOCK_COARSE_GRAINED)
       printk(KERN_EMERG "TASK CLOCK: new low %d ticks %llu\n", new_low, __get_clock_ticks(group_info, new_low));
 #endif
       //there is a new lowest thread, make sure to set it
