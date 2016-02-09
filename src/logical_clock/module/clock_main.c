@@ -97,6 +97,9 @@ void __wake_up_waiting_thread(struct task_clock_group_info * group_info, int32_t
       //set the lowest threads lowest
       group_info->user_status_arr[group_info->lowest_tid].lowest_clock=1;
   }
+  group_info->user_status_arr[group_info->lowest_tid].notifying_id=__current_tid();
+  group_info->user_status_arr[group_info->lowest_tid].notifying_clock=__get_clock_ticks(group_info, __current_tid());
+  group_info->user_status_arr[group_info->lowest_tid].notifying_diff=current->task_clock.user_status->notifying_diff;
 }
 
 void __set_new_low(struct task_clock_group_info * group_info, int32_t tid){
@@ -139,11 +142,15 @@ void task_clock_entry_overflow_update_period(struct task_clock_group_info * grou
     //if we don't want to count ticks...don't do any of this work.
     if (!__tick_counter_is_running(group_info)){
         return;
-    }    
+    }
+    //debugging
+    //current->task_clock.user_status->period_sets=group_info->clocks[__current_tid()].event->hw.sample_period;
+    current->task_clock.user_status->notifying_diff=__get_clock_ticks(group_info, __current_tid());
+    
     logical_clock_update_clock_ticks(group_info, __current_tid());
     logical_clock_update_overflow_period(group_info, __current_tid());
 }
-
+   
 
 void task_clock_overflow_handler(struct task_clock_group_info * group_info, struct pt_regs *regs){
   unsigned long flags;
@@ -176,7 +183,7 @@ void task_clock_overflow_handler(struct task_clock_group_info * group_info, stru
           //schedule work to be done when we are not in NMI context
           irq_work_queue(&group_info->pending_work);
       }
-  }
+      }*/
 }
 
 void __set_current_thread_to_lowest(struct task_clock_group_info * group_info){
@@ -460,9 +467,10 @@ void task_clock_entry_activate(struct task_clock_group_info * group_info){
   //__update_period(group_info);
   logical_clock_update_overflow_period(group_info, __current_tid());
   current->task_clock.user_status->notifying_id=0;
-  current->task_clock.user_status->notifying_sample=666;
+  current->task_clock.user_status->notifying_sample=0;
   current->task_clock.user_status->hit_bounded_fence=0;
-
+  current->task_clock.user_status->period_sets=0;
+  
   group_info->clocks[current->task_clock.tid].userspace_reading=0;
     //if I'm the new lowest, we need to set the flag so userspace can see that that is the case
   int32_t new_low=__new_lowest(group_info, current->task_clock.tid);
@@ -594,6 +602,7 @@ void task_clock_entry_stop_no_notify(struct task_clock_group_info * group_info){
 //lets start caring about the ticks we see (again)
 void task_clock_entry_start(struct task_clock_group_info * group_info){
     current->task_clock.user_status->notifying_id=0;
+    current->task_clock.user_status->period_sets=0;
     current->task_clock.user_status->notifying_sample=0;
     //the clock may have continued to run...so reset the ticks we've seen
     logical_clock_reset_current_ticks(group_info,__current_tid());
@@ -610,7 +619,8 @@ void task_clock_entry_start_no_notify(struct task_clock_group_info * group_info)
     logical_clock_set_perf_counter_max(group_info,__current_tid());
     //turn off overflows...just in case
     __tick_counter_turn_off(group_info);
-    current->task_clock.user_status->notifying_id=666;
+    current->task_clock.user_status->notifying_id=0;
+    current->task_clock.user_status->period_sets=0;
 }
 
 int task_clock_entry_is_singlestep(struct task_clock_group_info * group_info, struct pt_regs *regs){
