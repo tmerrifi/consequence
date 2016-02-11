@@ -72,7 +72,7 @@ static inline int logical_clock_should_sync_clocks(struct task_clock_group_info 
 
 //make sure we set the period so that we actually synchronize
 static inline uint64_t __target_sync_point(uint64_t ticks, uint64_t period){
-    int next_sync_point = ((ticks/SYNC_CLOCKS_INTERVAL + 1)*SYNC_CLOCKS_INTERVAL);
+    uint64_t next_sync_point = ((ticks/SYNC_CLOCKS_INTERVAL + 1)*SYNC_CLOCKS_INTERVAL);
     //use SYNC_CLOCKS_INTERVAL_WAIT_RANGE to ensure that we don't set the period
     //to be just before the next sync point
     if (ticks+period >= (next_sync_point-SYNC_CLOCKS_INTERVAL_WAIT_RANGE) ){
