@@ -26,7 +26,7 @@
 #define CS_WORK 1
 #endif
 
-#define ITERATIONS (1UL<<13)
+#define ITERATIONS (1UL<<15)
 
 uint32_t arr[NUM_OBJECTS];
 
@@ -55,6 +55,7 @@ int sum_array(){
 void * do_work(void * _id){
     int i;
     int id =* ((int *)_id);
+    srand(rand()*(id + 1));
     for (i=0;i<ITERATIONS;++i){
         int random_index = rand() % NUM_OBJECTS;
         int lock_index = get_lock_index(random_index);
