@@ -94,7 +94,7 @@ static inline int logical_clock_sync_point_arrive(struct task_clock_group_info *
         for(i=0;i<SYNC_CLOCKS_MAX_WAIT;i++){cpu_relax();}
         //now lets increment it to "close" the barrier
         cmpxchg(&group_info->global_sync_barrier_clock, sync_point, sync_point+1);
-        return 1;
+        return SYNC_CLOCKS_MAX_WAIT + 1;
     }
     //here we wait for the first thread to release us (or we overstay our welcome)
     while(group_info->global_sync_barrier_clock == sync_point && i++ < SYNC_CLOCKS_MAX_WAIT){
