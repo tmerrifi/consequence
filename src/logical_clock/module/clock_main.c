@@ -55,6 +55,25 @@
 
 MODULE_LICENSE("GPL");
 
+
+#ifdef USE_SYNC_POINT
+
+#define DEBUG_SYNC_POINTS_NUM 512
+#define DEBUG_SYNC_POINTS_THREADS 8
+
+struct __debug_sync_points{
+    uint64_t points[DEBUG_SYNC_POINTS_NUM];
+    int counter;
+}sync_points[DEBUG_SYNC_POINTS_THREADS];
+
+void __add_debug_sync_points(uint64_t value, int tid){
+    if (sync_points[tid].counter < DEBUG_SYNC_POINTS_NUM){
+        sync_points[tid].points[sync_points[tid].counter++]=value;
+    }
+}
+
+#endif
+
 //after we execute this function, a new lowest task clock has been determined
 int32_t __new_lowest(struct task_clock_group_info * group_info, int32_t tid){
   int32_t new_low=-1;
@@ -97,9 +116,6 @@ void __wake_up_waiting_thread(struct task_clock_group_info * group_info, int32_t
       //set the lowest threads lowest
       group_info->user_status_arr[group_info->lowest_tid].lowest_clock=1;
   }
-  group_info->user_status_arr[group_info->lowest_tid].notifying_id=__current_tid();
-  group_info->user_status_arr[group_info->lowest_tid].notifying_clock=__get_clock_ticks(group_info, __current_tid());
-  group_info->user_status_arr[group_info->lowest_tid].notifying_diff=current->task_clock.user_status->notifying_diff;
 }
 
 void __set_new_low(struct task_clock_group_info * group_info, int32_t tid){
@@ -143,10 +159,6 @@ void task_clock_entry_overflow_update_period(struct task_clock_group_info * grou
     if (!__tick_counter_is_running(group_info)){
         return;
     }
-    //debugging
-    //current->task_clock.user_status->period_sets=group_info->clocks[__current_tid()].event->hw.sample_period;
-    current->task_clock.user_status->notifying_diff=__get_clock_ticks(group_info, __current_tid());
-    
     logical_clock_update_clock_ticks(group_info, __current_tid());
     logical_clock_update_overflow_period(group_info, __current_tid());
 }
@@ -170,20 +182,13 @@ void task_clock_overflow_handler(struct task_clock_group_info * group_info, stru
   if (new_low >= 0 && new_low != current->task_clock.tid){
       group_info->user_status_arr[new_low].lowest_clock=1;
   }
-
-  /*#if defined(DEBUG_TASK_CLOCK_COARSE_GRAINED)
-      printk(KERN_EMERG "TASK CLOCK: new low %d ticks %llu\n", new_low, __get_clock_ticks(group_info, new_low));
-#endif
-      //there is a new lowest thread, make sure to set it
-      if (__thread_is_waiting(group_info, new_low)){
-          group_info->nmi_new_low=1;
-#if defined(DEBUG_TASK_CLOCK_COARSE_GRAINED) && defined(DEBUG_TASK_CLOCK_FINE_GRAINED)
-          printk(KERN_EMERG "----TASK CLOCK: notifying %d ticks %llu\n", new_low, __get_clock_ticks(group_info, new_low));
-#endif
-          //schedule work to be done when we are not in NMI context
-          irq_work_queue(&group_info->pending_work);
-      }
-      }*/
+  
+  //did we hit a sync point???
+  if (logical_clock_should_sync_clocks(group_info, __current_tid())){
+      //if so, lets wait and sync up
+      logical_clock_sync_point_arrive(group_info);
+      //debugging stuff
+  }  
 }
 
 void __set_current_thread_to_lowest(struct task_clock_group_info * group_info){
@@ -254,7 +259,7 @@ int __determine_lowest_and_notify_or_wait(struct task_clock_group_info * group_i
 //case, we need to figure out if they are the lowest and let them know before they call poll
 void task_clock_on_disable(struct task_clock_group_info * group_info){
     int lowest_tid=-1;
-
+    
     //if we are in single stepping mode, we no longer need it
     if (__single_stepping_on(group_info, __current_tid())){
         end_bounded_memory_fence_early(group_info);
@@ -288,7 +293,6 @@ void task_clock_on_disable(struct task_clock_group_info * group_info){
 
 void task_clock_add_ticks(struct task_clock_group_info * group_info, int32_t ticks){
     int lowest_tid=-1;
-    //TODO: Why are we disabling interrupts here?
     spin_lock(&group_info->lock);
     __inc_clock_ticks_no_chunk_add(group_info, current->task_clock.tid, ticks);
     //current->task_clock.user_status->ticks=__get_clock_ticks(group_info, current->task_clock.tid);
@@ -306,9 +310,7 @@ void task_clock_on_enable(struct task_clock_group_info * group_info){
 
     //reset the tick value now so we can figure out the length of a chunk later
     __reset_chunk_ticks(group_info, __current_tid());
-
     __add_lazy_ticks(group_info, current->task_clock.tid);
-    
     //turn the counter back on...next overflow will actually be counted
     __tick_counter_turn_on(group_info);
 #if defined(DEBUG_TASK_CLOCK_COARSE_GRAINED)
@@ -393,6 +395,7 @@ void task_clock_entry_init(struct task_clock_group_info * group_info, struct per
     group_info->clocks[current->task_clock.tid].userspace_reading=0;
     group_info->clocks[current->task_clock.tid].event=event;
     group_info->clocks[current->task_clock.tid].count_ticks=0;
+    group_info->clocks[current->task_clock.tid].local_sync_barrier_clock=0;
     
     __reset_chunk_ticks(group_info, __current_tid());
     __clear_entry_state(group_info);
@@ -429,6 +432,7 @@ struct task_clock_group_info * task_clock_group_init(void){
   group_info->nmi_new_low=0;
   group_info->user_status_arr=NULL;
   group_info->active_threads = kmalloc(sizeof(struct listarray), GFP_KERNEL);
+  group_info->global_sync_barrier_clock=0;
   listarray_init(group_info->active_threads);
   __init_task_clock_entries(group_info);
   init_irq_work(&group_info->pending_work, __task_clock_notify_waiting_threads_irq);
@@ -575,8 +579,7 @@ void task_clock_entry_stop(struct task_clock_group_info * group_info){
     
     //read the counter and update our clock
     logical_clock_read_clock_and_update(group_info, __current_tid(), true);
-    
-     spin_lock(&group_info->lock);
+    spin_lock(&group_info->lock);
 
     lowest_tid=__determine_lowest_and_notify_or_wait(group_info, 787);
     spin_unlock(&group_info->lock);
@@ -658,12 +661,15 @@ int init_module(void)
 #else
     task_clock_func.task_clock_entry_is_singlestep=NULL;
 #endif
+
+    memset(sync_points, 0, sizeof(struct __debug_sync_points)*DEBUG_SYNC_POINTS_THREADS);
     
   return 0;
 }
 
 void cleanup_module(void)
 {
+    int i,j;
   task_clock_func.task_clock_overflow_handler=NULL;
   task_clock_func.task_clock_group_init=NULL;
   task_clock_func.task_clock_entry_init=NULL;
@@ -680,5 +686,13 @@ void cleanup_module(void)
   task_clock_func.task_clock_entry_start=NULL;
   task_clock_func.task_clock_entry_is_singlestep=NULL;
   task_clock_func.task_clock_entry_read_clock=NULL;
+  
+  for (i=0;i<DEBUG_SYNC_POINTS_THREADS;i++){
+      for (j=0;j<sync_points[i].counter;j++){
+          printk(KERN_EMERG "t: %d %lld\n", i, sync_points[i].points[j]);
+      }
+  }
+
+
   
 }

@@ -23,7 +23,8 @@
 
 */
 
-
+#include "asm/processor.h"
+#include "asm/cmpxchg.h"
 #include "bounded_tso.h"
 
 //whats the max overflow period
@@ -37,10 +38,91 @@
 
 #define X86_CNT_VAL_MASK (1ULL << X86_CNT_VAL_BITS) - 1
 
+
+#define SYNC_CLOCKS_INTERVAL 1000000ULL
+
+#define SYNC_CLOCKS_INTERVAL_WAIT_RANGE 5000
+
+#define SYNC_CLOCKS_MAX_WAIT 10000
+
+#define USE_SYNC_POINT 1
+
+//****functions for periodically syncing the clocks of running threads*******
+#ifdef USE_SYNC_POINT
+
+#define __get_sync_point_hit(ticks) (SYNC_CLOCKS_INTERVAL*(ticks/SYNC_CLOCKS_INTERVAL))
+
+//after getting an NMI...should we sync the clocks?
+static inline int logical_clock_should_sync_clocks(struct task_clock_group_info * group_info, int tid){
+    uint64_t local_clock_ticks=__get_clock_ticks(group_info, tid);
+    //which clock val did we hit
+    uint64_t clock_val_hit=__get_sync_point_hit(local_clock_ticks);
+    //make sure we actually arrived at a point where we want to sync. We check...
+    //(1) did we hit here already? and (2) are we within the range to do a sync
+    if (clock_val_hit > 0 &&
+        group_info->clocks[__current_tid()].local_sync_barrier_clock < clock_val_hit &&
+        local_clock_ticks >= clock_val_hit &&                                           
+        local_clock_ticks < ((clock_val_hit)+SYNC_CLOCKS_INTERVAL_WAIT_RANGE)){
+        //set the local barrier as we've now hit it...don't want to hit it again
+        group_info->clocks[__current_tid()].local_sync_barrier_clock=clock_val_hit;
+        return 1;
+    }
+    return 0;
+}
+
+//make sure we set the period so that we actually synchronize
+static inline uint64_t __target_sync_point(uint64_t ticks, uint64_t period){
+    int next_sync_point = ((ticks/SYNC_CLOCKS_INTERVAL + 1)*SYNC_CLOCKS_INTERVAL);
+    //use SYNC_CLOCKS_INTERVAL_WAIT_RANGE to ensure that we don't set the period
+    //to be just before the next sync point
+    if (ticks+period >= (next_sync_point-SYNC_CLOCKS_INTERVAL_WAIT_RANGE) ){
+        return (next_sync_point - ticks) + IMPRECISE_OVERFLOW_BUFFER;
+    }
+    return period;
+}
+
+//wait at the sync point, return true if we actually synchronized with others
+static inline int logical_clock_sync_point_arrive(struct task_clock_group_info * group_info){
+    //get the sync point we just hit
+    uint64_t sync_point=__get_sync_point_hit(__get_clock_ticks(group_info, __current_tid()));
+    //what's the current global sync point
+    uint64_t current_last_global=group_info->global_sync_barrier_clock;
+    int i=0;
+    if (current_last_global < sync_point &&
+        cmpxchg(&group_info->global_sync_barrier_clock, current_last_global, sync_point)==current_last_global){
+        //first to arrive at this sync point
+        for(i=0;i<SYNC_CLOCKS_MAX_WAIT;i++){cpu_relax();}
+        //now lets increment it to "close" the barrier
+        cmpxchg(&group_info->global_sync_barrier_clock, sync_point, sync_point+1);
+        return 1;
+    }
+    //here we wait for the first thread to release us (or we overstay our welcome)
+    while(group_info->global_sync_barrier_clock == sync_point && i++ < SYNC_CLOCKS_MAX_WAIT){
+        cpu_relax();
+    }
+    //we return i so that if we actually waited around we return true
+    return i;
+}
+
+#else
+
+static inline int logical_clock_should_sync_clocks(struct task_clock_group_info * group_info, int tid){
+    return 0;
+}
+
+static inline uint64_t __target_sync_point(uint64_t ticks, uint64_t period){
+    return period;
+}
+
+static inline void logical_clock_sync_point_arrive(struct task_clock_group_info * group_info){
+    return 0;
+}
+
+#endif
+/*******end of syncing functions*****/
+
 static inline void logical_clock_update_clock_ticks(struct task_clock_group_info * group_info, int tid){
     unsigned long rawcount = local64_read(&group_info->clocks[tid].event->count); 
-    group_info->clocks[tid].debug_last_overflow_ticks=rawcount;
-    group_info->clocks[tid].debug_last_enable_ticks=__get_chunk_ticks(group_info, tid);
     __inc_clock_ticks(group_info, tid, rawcount);
     local64_set(&group_info->clocks[tid].event->count, 0);
 }
@@ -96,8 +178,6 @@ static inline void logical_clock_read_clock_and_update(struct task_clock_group_i
     delta+=local64_read(&group_info->clocks[id].event->count);
     local64_set(&group_info->clocks[id].event->count, 0);
     if (counter_was_on){
-        group_info->clocks[__current_tid()].debug_last_overflow_ticks=delta;
-        group_info->clocks[id].debug_last_enable_ticks=__get_chunk_ticks(group_info, id);
         //add it to our current clock
         __inc_clock_ticks(group_info, id, delta);
     }
@@ -141,27 +221,33 @@ static inline void logical_clock_set_perf_counter(struct task_clock_group_info *
 
 
 static inline void logical_clock_update_overflow_period(struct task_clock_group_info * group_info, int id){
+    uint64_t myclock;
 #ifdef USE_ADAPTIVE_OVERFLOW_PERIOD
-    uint64_t lowest_waiting_tid_clock, myclock, new_sample_period;
-    int32_t lowest_waiting_tid=0;    
+    uint64_t lowest_waiting_tid_clock, new_sample_period;
+    int32_t lowest_waiting_tid=0;
 
-    if (__single_stepping_on(group_info, id) || __hit_bounded_fence()){
-        //this shouldn't matter...as we're single stepping now or about to end a bounded chunk. Just set it to something that won't overflow
-        //during the single step
-        group_info->clocks[id].event->hw.sample_period = IMPRECISE_BOUNDED_CHUNK_SIZE;
-    }
-    else{
-        new_sample_period=group_info->clocks[id].event->hw.sample_period+10000;
-        lowest_waiting_tid = __search_for_lowest_waiting_exclude_current(group_info, id);
-        if (lowest_waiting_tid>=0){
-            lowest_waiting_tid_clock = __get_clock_ticks(group_info,lowest_waiting_tid);
-            myclock = __get_clock_ticks(group_info,id);
-            //if there is a waiting thread, and its clock is larger than ours, stop when we get there
-            if (lowest_waiting_tid_clock > myclock){
-                new_sample_period=__max(lowest_waiting_tid_clock - myclock + 1000, MIN_CLOCK_SAMPLE_PERIOD);
-            }
+    //only do this if the remaining ticks is very low, just in case we ended up here "early"
+    if (local64_read(&group_info->clocks[id].event->hw.period_left) < -(MIN_CLOCK_SAMPLE_PERIOD/2)){
+        myclock = __get_clock_ticks(group_info,id);
+        if (__single_stepping_on(group_info, id) || __hit_bounded_fence()){
+            //this shouldn't matter...as we're single stepping now or about to end a bounded chunk. Just set it to something that won't overflow
+            //during the single step
+            group_info->clocks[id].event->hw.sample_period = IMPRECISE_BOUNDED_CHUNK_SIZE;
         }
-        group_info->clocks[id].event->hw.sample_period =  __min(__bound_overflow_period(group_info, id, new_sample_period), MAX_CLOCK_SAMPLE_PERIOD);
+        else{
+            new_sample_period=group_info->clocks[id].event->hw.sample_period+10000;
+            lowest_waiting_tid = __search_for_lowest_waiting_exclude_current(group_info, id);
+            if (lowest_waiting_tid>=0){
+                lowest_waiting_tid_clock = __get_clock_ticks(group_info,lowest_waiting_tid);
+                //if there is a waiting thread, and its clock is larger than ours, stop when we get there
+                if (lowest_waiting_tid_clock > myclock){
+                    new_sample_period=__max(lowest_waiting_tid_clock - myclock + 1000, MIN_CLOCK_SAMPLE_PERIOD);
+                }
+            }
+            group_info->clocks[id].event->hw.sample_period=__target_sync_point(myclock,
+                                                                               __min(__bound_overflow_period(group_info, id, new_sample_period), MAX_CLOCK_SAMPLE_PERIOD));
+        }
+        local64_set(&group_info->clocks[id].event->hw.period_left, 0);
     }
 
 #endif
