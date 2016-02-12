@@ -116,11 +116,8 @@ private:
       void * sync_object;
       int coarsening_counter;
       int coarsening_level;
-      uint64_t perf_counter_last;
-      uint64_t perf_counter_current;
-      int cpu;
       uint64_t period_sets;
-      
+      uint64_t notifying_clock;
   };
 
   class EventEntry {
@@ -159,11 +156,7 @@ private:
 
               this->events[this->event_counter].end_time_us=time_util_time_diff(init_time, &t1);
               this->events[this->event_counter].end_clock=determ_task_clock_read();
-              this->events[this->event_counter].coarsening_counter=determ_task_clock_get_coarsened_ticks();
-              this->events[this->event_counter].perf_counter_last=determ_task_clock_last_raw_perf();
-              this->events[this->event_counter].perf_counter_current=determ_debug_notifying_diff_read();
-              this->events[this->event_counter].cpu=determ_debug_notifying_id_read();
-              this->events[this->event_counter].period_sets=determ_debug_notifying_clock_read();       
+              this->events[this->event_counter].notifying_clock=determ_debug_notifying_clock_read();
               ++this->event_counter;
           }        
 #endif
@@ -191,9 +184,7 @@ private:
             this->events[this->event_counter].begin_clock=determ_task_clock_read();
             this->events[this->event_counter].end_clock=determ_task_clock_read();
             this->events[this->event_counter].sync_object=sync_object;
-            this->events[this->event_counter].cpu=determ_debug_notifying_id_read();
-            this->events[this->event_counter].period_sets=determ_debug_notifying_clock_read();
-            this->events[this->event_counter].perf_counter_current=determ_debug_notifying_diff_read();
+            this->events[this->event_counter].notifying_clock=determ_debug_notifying_clock_read();
             ++this->event_counter;
         }        
 #endif
@@ -205,7 +196,6 @@ private:
           if (this->event_counter < MAX_EVENTS){
               this->events[this->event_counter].coarsening_counter=coarsening_counter;
               this->events[this->event_counter].coarsening_level=coarsening_level;
-
           }
 #endif          
       }
@@ -218,11 +208,7 @@ private:
               cout << "EVENT: " << threadindex << " " << this->events[i].begin_time_us 
                    << " " << this->events[i].end_time_us << " " << this->events[i].event_type << " " 
                    << this->events[i].begin_clock << " " << this->events[i].end_clock - this->events[i].begin_clock << " "
-                   << this->events[i].dirty_pages << " " << this->events[i].updated_pages
-                   << " " << this->events[i].partial_pages << " " << this->events[i].merged_pages << " " 
-                   << this->events[i].sync_object << " " << this->events[i].coarsening_counter << " " 
-                   << this->events[i].coarsening_level << " " << this->events[i].perf_counter_current << " " 
-                   << this->events[i].perf_counter_last << " " << this->events[i].cpu << " " << this->events[i].period_sets << endl;
+                   << this->events[i].sync_object << " " << this->events[i].notifying_clock << endl;
           }
 #endif
       }
@@ -234,11 +220,7 @@ private:
               cout << "EVENT: " << threadindex << " " << this->events[i].begin_time_us 
                    << " " << this->events[i].end_time_us << " " << this->events[i].event_type << " " 
                    << this->events[i].begin_clock << " " << this->events[i].end_clock - this->events[i].begin_clock << " "
-                   << this->events[i].dirty_pages << " " << this->events[i].updated_pages
-                   << " " << this->events[i].partial_pages << " " << this->events[i].merged_pages << " " 
-                   << this->events[i].sync_object << " " << this->events[i].coarsening_counter << " " 
-                   << this->events[i].coarsening_level << " " << this->events[i].perf_counter_current << " " 
-                   << this->events[i].perf_counter_last << " " << this->events[i].cpu << " " << this->events[i].period_sets << endl;
+                   << this->events[i].sync_object << " " << this->events[i].notifying_clock << endl;
           }
 #endif
       }
