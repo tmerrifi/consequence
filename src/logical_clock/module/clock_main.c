@@ -72,6 +72,16 @@ void __add_debug_sync_points(uint64_t value, int tid){
     }
 }
 
+
+void __print_debug_sync_points(){
+    int i,j;
+    for (i=0;i<DEBUG_SYNC_POINTS_THREADS;i++){
+        for (j=0;j<sync_points[i].counter;j++){
+            printk(KERN_EMERG "t: %d %lld\n", i, sync_points[i].points[j]);
+        }
+    }
+}
+
 #else
 
 void __add_debug_sync_points(uint64_t value, int tid){}
@@ -121,6 +131,7 @@ void __wake_up_waiting_thread(struct task_clock_group_info * group_info, int32_t
       //set the lowest threads lowest
       group_info->user_status_arr[group_info->lowest_tid].lowest_clock=1;
   }
+  group_info->user_status_arr[group_info->lowest_tid].notifying_clock=__get_clock_ticks(group_info, __current_tid());
 }
 
 void __set_new_low(struct task_clock_group_info * group_info, int32_t tid){
@@ -186,6 +197,8 @@ void task_clock_overflow_handler(struct task_clock_group_info * group_info, stru
   
   if (new_low >= 0 && new_low != current->task_clock.tid){
       group_info->user_status_arr[new_low].lowest_clock=1;
+      group_info->user_status_arr[new_low].notifying_clock=__get_clock_ticks(group_info, __current_tid());
+
   }
   
   //did we hit a sync point???
@@ -699,11 +712,6 @@ void cleanup_module(void)
 
   #ifdef USE_SYNC_POINT
 
-  for (i=0;i<DEBUG_SYNC_POINTS_THREADS;i++){
-      for (j=0;j<sync_points[i].counter;j++){
-          printk(KERN_EMERG "t: %d %lld\n", i, sync_points[i].points[j]);
-      }
-  }
   #endif
 
   
