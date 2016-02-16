@@ -61,6 +61,10 @@
 #define DEBUG_STACK_ADDRESS 0xffffea20
 #define DEBUG_ARRAY_ADDRESS 0x80a8090
 
+#ifndef TOKEN_ACQ_ADD_CLOCK
+#define TOKEN_ACQ_ADD_CLOCK 10000
+#endif
+
 class xrun {
 
 
@@ -665,7 +669,7 @@ public:
           wait_cycles = determ_task_clock_read_cycle_counter() - start_cycles;
 #endif
           //fast forward our clock
-          determ_task_clock_add_ticks(fast_forward_clock());
+          determ_task_clock_add_ticks_lazy(fast_forward_clock() + TOKEN_ACQ_ADD_CLOCK);
           _token_holding=true;
           //we just got out of a coarsened tx...should we increase or decrease the granularity?
           if (tx_monitor_next){

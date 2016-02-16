@@ -27,11 +27,15 @@
 #include "asm/cmpxchg.h"
 #include "bounded_tso.h"
 
+#ifndef MAX_CLOCK_SAMPLE_PERIOD
 //whats the max overflow period
 #define MAX_CLOCK_SAMPLE_PERIOD 200000
+#endif
 
+#ifndef MIN_CLOCK_SAMPLE_PERIOD
 //whats the minimum overflow period
-#define MIN_CLOCK_SAMPLE_PERIOD 20000
+#define MIN_CLOCK_SAMPLE_PERIOD 1000
+#endif
 
 //The value bits in the counter...this is very much model specific
 #define X86_CNT_VAL_BITS 48
@@ -241,7 +245,7 @@ static inline void logical_clock_update_overflow_period(struct task_clock_group_
                 lowest_waiting_tid_clock = __get_clock_ticks(group_info,lowest_waiting_tid);
                 //if there is a waiting thread, and its clock is larger than ours, stop when we get there
                 if (lowest_waiting_tid_clock > myclock){
-                    new_sample_period=__max(lowest_waiting_tid_clock - myclock + 1000, MIN_CLOCK_SAMPLE_PERIOD);
+                    new_sample_period=__max(lowest_waiting_tid_clock - myclock + IMPRECISE_OVERFLOW_BUFFER, MIN_CLOCK_SAMPLE_PERIOD);
                 }
             }
             group_info->clocks[id].event->hw.sample_period=__target_sync_point(myclock,
