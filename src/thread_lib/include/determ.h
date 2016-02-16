@@ -118,6 +118,7 @@ private:
       int coarsening_level;
       uint64_t period_sets;
       uint64_t notifying_clock;
+      int notifying_id;
   };
 
   class EventEntry {
@@ -157,6 +158,7 @@ private:
               this->events[this->event_counter].end_time_us=time_util_time_diff(init_time, &t1);
               this->events[this->event_counter].end_clock=determ_task_clock_read();
               this->events[this->event_counter].notifying_clock=determ_debug_notifying_clock_read();
+              this->events[this->event_counter].notifying_id=determ_debug_notifying_id_read();
               ++this->event_counter;
           }        
 #endif
@@ -185,6 +187,7 @@ private:
             this->events[this->event_counter].end_clock=determ_task_clock_read();
             this->events[this->event_counter].sync_object=sync_object;
             this->events[this->event_counter].notifying_clock=determ_debug_notifying_clock_read();
+            this->events[this->event_counter].notifying_id=determ_debug_notifying_id_read();
             ++this->event_counter;
         }        
 #endif
@@ -208,7 +211,7 @@ private:
               cout << "EVENT: " << threadindex << " " << this->events[i].begin_time_us 
                    << " " << this->events[i].end_time_us << " " << this->events[i].event_type << " " 
                    << this->events[i].begin_clock << " " << this->events[i].end_clock - this->events[i].begin_clock << " "
-                   << this->events[i].sync_object << " " << this->events[i].notifying_clock << endl;
+                   << this->events[i].sync_object << " " << this->events[i].notifying_clock << " " << this->events[i].notifying_id << endl;
           }
 #endif
       }
@@ -220,7 +223,7 @@ private:
               cout << "EVENT: " << threadindex << " " << this->events[i].begin_time_us 
                    << " " << this->events[i].end_time_us << " " << this->events[i].event_type << " " 
                    << this->events[i].begin_clock << " " << this->events[i].end_clock - this->events[i].begin_clock << " "
-                   << this->events[i].sync_object << " " << this->events[i].notifying_clock << endl;
+                   << this->events[i].sync_object << " " << this->events[i].notifying_clock << " " << this->events[i].notifying_id << endl;
           }
 #endif
       }
