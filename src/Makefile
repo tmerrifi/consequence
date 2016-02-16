@@ -26,6 +26,11 @@ ifdef minperiod
 	CLOCK_MODULE_FLAGS += -DMIN_CLOCK_SAMPLE_PERIOD=$(minperiod)
 endif
 
+ifdef maxperiod
+	CLOCK_MODULE_FLAGS += -DMAX_CLOCK_SAMPLE_PERIOD=$(maxperiod)
+endif
+
+
 #CLOCK_MODULE_FLAGS += -DMIN_CLOCK_SAMPLE_PERIOD=20000
 
 export CONSEQ_FLAGS
