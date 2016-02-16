@@ -132,6 +132,7 @@ void __wake_up_waiting_thread(struct task_clock_group_info * group_info, int32_t
       group_info->user_status_arr[group_info->lowest_tid].lowest_clock=1;
   }
   group_info->user_status_arr[group_info->lowest_tid].notifying_clock=__get_clock_ticks(group_info, __current_tid());
+  group_info->user_status_arr[group_info->lowest_tid].notifying_id=__current_tid();
 }
 
 void __set_new_low(struct task_clock_group_info * group_info, int32_t tid){
@@ -198,7 +199,7 @@ void task_clock_overflow_handler(struct task_clock_group_info * group_info, stru
   if (new_low >= 0 && new_low != current->task_clock.tid){
       group_info->user_status_arr[new_low].lowest_clock=1;
       group_info->user_status_arr[new_low].notifying_clock=__get_clock_ticks(group_info, __current_tid());
-
+      group_info->user_status_arr[new_low].notifying_id=__current_tid();
   }
   
   //did we hit a sync point???
