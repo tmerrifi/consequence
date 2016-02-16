@@ -2,7 +2,7 @@
 #1 location of output file from program run
 #2 how many images to make
 #3 which segment to start at? (some might be hundreds long but we only care about 50-75 (so 25 50 would be the arguments for 2 & 3)
-#4 us per pixel
+#4 pixels per us
 #5 user friendly name (workload name?)
 
 width=10000
