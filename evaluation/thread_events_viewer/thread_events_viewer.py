@@ -41,9 +41,9 @@ counter = 0
 
 for row in sys.stdin:
     if counter % 2 == 0:
-        offset=30
+        offset=60
     else:
-        offset=-40
+        offset=30
     
     event = row.strip("\n").split(" ")
     thread_id,start_time,end_time,event_type,begin_clock,end_clock = int(event[0]) * 200 + 200, int(event[1]), int(event[2]), event[3], int(event[4])/1000, int(event[4])/1000+int(event[5])/1000
@@ -75,5 +75,9 @@ for row in sys.stdin:
         else:
             draw.line([start_time,thread_id,end_time,thread_id], fill=colors[eventKey[event_type]], width=40)
 
+        if end_time - start_time > 50:
+            draw.text((start_time,thread_id + offset), str(begin_clock), (0,0,0), font=fontSmall)
+            draw.text((start_time,thread_id + offset + 30), str(start_time), (0,0,0), font=fontSmall)
+            
 filename = str(sys.argv[1]) + ".png";
 image1.save(filename)
