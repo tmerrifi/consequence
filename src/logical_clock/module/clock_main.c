@@ -189,7 +189,9 @@ void task_clock_overflow_handler(struct task_clock_group_info * group_info, stru
   if (!__tick_counter_is_running(group_info)){
       return;
   }
-  
+
+  group_info->user_status_arr[group_info->lowest_tid].notifying_diff++;
+
   if (__single_stepping_on(group_info, __current_tid())){
       bounded_memory_fence_turn_on_tf(group_info, regs);
   }
@@ -494,6 +496,7 @@ void task_clock_entry_activate(struct task_clock_group_info * group_info){
   logical_clock_update_overflow_period(group_info, __current_tid());
   current->task_clock.user_status->notifying_id=0;
   current->task_clock.user_status->notifying_sample=0;
+  current->task_clock.user_status->notifying_diff=0;
   current->task_clock.user_status->hit_bounded_fence=0;
   current->task_clock.user_status->period_sets=0;
   
