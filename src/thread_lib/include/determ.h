@@ -119,6 +119,7 @@ private:
       uint64_t period_sets;
       uint64_t notifying_clock;
       int notifying_id;
+      uint64_t context_switches;
   };
 
   class EventEntry {
@@ -127,38 +128,42 @@ private:
           this->event_counter=0;
       }
 
-      void start_event(int type, struct timespec * init_time, void * sync_object) {
+      void start_event(int type, struct timespec * init_time, void * sync_object, bool light_weight) {
 #ifdef EVENT_VIEWER
           struct timespec t1;
           if (this->event_counter < MAX_EVENTS){
+              if (!light_weight){
+                  this->events[this->event_counter].begin_clock=determ_task_clock_read();
+                  this->events[this->event_counter].sync_object=sync_object;
+              }
               this->events[this->event_counter].event_type=type;
-              this->events[this->event_counter].begin_clock=determ_task_clock_read();
-              this->events[this->event_counter].sync_object=sync_object;
               clock_gettime(CLOCK_REALTIME, &t1);
               this->events[this->event_counter].begin_time_us=time_util_time_diff(init_time, &t1);
           }
 #endif
       }
       
-      void end_event(int type, struct timespec * init_time, int threadindex){
-#ifdef EVENT_VIEWER
+      void end_event(int type, struct timespec * init_time, int threadindex, bool light_weight){
+#ifdef EVENT_VIEWER 
           struct timespec t1;
           unsigned numa_node, cpu;
-          clock_gettime(CLOCK_REALTIME, &t1);
           if (this->event_counter < MAX_EVENTS){
-              //if we don't have a begin event, just use the end of the last event
-              if (this->events[this->event_counter].begin_time_us==0 && 
-                  this->events[this->event_counter].begin_clock==0 &&
-                  this->event_counter > 0){
+              clock_gettime(CLOCK_REALTIME, &t1);
+              if (!light_weight){
+                  //if we don't have a begin event, just use the end of the last event
+                  if (this->events[this->event_counter].begin_time_us==0 && 
+                      this->events[this->event_counter].begin_clock==0 &&
+                      this->event_counter > 0){
                       this->events[this->event_counter].event_type=type;
                       this->events[this->event_counter].begin_time_us=this->events[this->event_counter-1].end_time_us;
                       this->events[this->event_counter].begin_clock=this->events[this->event_counter-1].end_clock;
+                  }
+                  this->events[this->event_counter].end_clock=determ_task_clock_read();
+                  this->events[this->event_counter].notifying_clock=determ_debug_notifying_clock_read();
+                  this->events[this->event_counter].notifying_id=determ_debug_notifying_id_read();
+                  this->events[this->event_counter].context_switches=determ_debug_notifying_diff_read();
               }
-
               this->events[this->event_counter].end_time_us=time_util_time_diff(init_time, &t1);
-              this->events[this->event_counter].end_clock=determ_task_clock_read();
-              this->events[this->event_counter].notifying_clock=determ_debug_notifying_clock_read();
-              this->events[this->event_counter].notifying_id=determ_debug_notifying_id_read();
               ++this->event_counter;
           }        
 #endif
@@ -175,24 +180,26 @@ private:
 #endif
       }
       
-      void add_atomic_event(int type, struct timespec * init_time, void * sync_object){
+      void add_atomic_event(int type, struct timespec * init_time, void * sync_object, bool light_weight){
 #ifdef EVENT_VIEWER
           struct timespec t1;
         clock_gettime(CLOCK_REALTIME, &t1);
         if (this->event_counter < MAX_EVENTS){
+            if (!light_weight){
+                this->events[this->event_counter].begin_clock=
+                    this->events[this->event_counter].end_clock=determ_task_clock_read();
+                this->events[this->event_counter].sync_object=sync_object;
+                this->events[this->event_counter].notifying_clock=determ_debug_notifying_clock_read();
+                this->events[this->event_counter].notifying_id=determ_debug_notifying_id_read();
+                this->events[this->event_counter].context_switches=determ_debug_notifying_diff_read();
+            }
             this->events[this->event_counter].event_type=type;
-            this->events[this->event_counter].begin_time_us=time_util_time_diff(init_time, &t1);
-            this->events[this->event_counter].end_time_us=time_util_time_diff(init_time, &t1);
-            this->events[this->event_counter].begin_clock=determ_task_clock_read();
-            this->events[this->event_counter].end_clock=determ_task_clock_read();
-            this->events[this->event_counter].sync_object=sync_object;
-            this->events[this->event_counter].notifying_clock=determ_debug_notifying_clock_read();
-            this->events[this->event_counter].notifying_id=determ_debug_notifying_id_read();
+            this->events[this->event_counter].begin_time_us=
+                this->events[this->event_counter].end_time_us=time_util_time_diff(init_time, &t1);
             ++this->event_counter;
         }        
 #endif
       }
-
 
       void add_coarsening_stats(int coarsening_counter, int coarsening_level, uint64_t perf_counter){
 #ifdef EVENT_VIEWER
@@ -211,7 +218,8 @@ private:
               cout << "EVENT: " << threadindex << " " << this->events[i].begin_time_us 
                    << " " << this->events[i].end_time_us << " " << this->events[i].event_type << " " 
                    << this->events[i].begin_clock << " " << this->events[i].end_clock - this->events[i].begin_clock << " "
-                   << this->events[i].sync_object << " " << this->events[i].notifying_clock << " " << this->events[i].notifying_id << endl;
+                   << this->events[i].sync_object << " " << this->events[i].notifying_clock << " " << this->events[i].notifying_id << " "
+                   << this->events[i].context_switches << endl;
           }
 #endif
       }
@@ -223,7 +231,8 @@ private:
               cout << "EVENT: " << threadindex << " " << this->events[i].begin_time_us 
                    << " " << this->events[i].end_time_us << " " << this->events[i].event_type << " " 
                    << this->events[i].begin_clock << " " << this->events[i].end_clock - this->events[i].begin_clock << " "
-                   << this->events[i].sync_object << " " << this->events[i].notifying_clock << " " << this->events[i].notifying_id << endl;
+                   << this->events[i].sync_object << " " << this->events[i].notifying_clock << " " << this->events[i].notifying_id << " "
+                   << this->events[i].context_switches << endl;
           }
 #endif
       }
@@ -520,7 +529,7 @@ public:
           if (true){
 #endif //end EVENT_VIEWER_LITE
               EventEntry * entry = &_event_entries[threadindex];
-              entry->start_event(event_type, &init_time, sync_object);
+              entry->start_event(event_type, &init_time, sync_object, false);
           }
 #endif //end EVENT VIEWER
   }
@@ -534,7 +543,7 @@ public:
           if (true){
 #endif //end EVENT_VIEWER_LITE
               EventEntry * entry = &_event_entries[threadindex];
-              entry->end_event(event_type, &init_time, threadindex);
+              entry->end_event(event_type, &init_time, threadindex, false);
           }
 #endif
   }
@@ -548,7 +557,7 @@ public:
           if (true){
 #endif //end EVENT_VIEWER_LITE
               EventEntry * entry = &_event_entries[threadindex];
-              entry->add_atomic_event(event_type, &init_time, sync_object);
+              entry->add_atomic_event(event_type, &init_time, sync_object, false);
           }
 #endif //end EVENT VIEWER
   }
