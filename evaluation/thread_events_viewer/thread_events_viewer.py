@@ -27,7 +27,7 @@ draw = ImageDraw.Draw(image1)
 
 eventKey = { "0" : "TRANSACTION", "1" : "TOKEN_WAIT", "2" : "CONVERSION_COMMIT", "3" : "WAIT_LOWEST", "20" : "COND_SIG", "21" : "COND_WAIT",
              "23" : "MUTEX_LOCK", "24" : "MUTEX_UNLOCK", "39" : "BEGIN_SPECULATION", "40" : "FAILED_SPECULATION", "41" : "END_SPECULATION",
-             "32" : "MALLOC", "50" : "FREE", "51" : "COND_INIT", "52" : "MUTEX_INIT"};
+             "32" : "MALLOC", "50" : "FREE", "51" : "COND_INIT", "52" : "MUTEX_INIT", "30" : "TX_END", "31" : "TX_START"};
 
 colors = { "TRANSACTION" : "red", "TOKEN_WAIT" : "blue", "CONVERSION_COMMIT" : "green", "WAIT_LOWEST" : "black" };
 
@@ -71,6 +71,10 @@ for row in sys.stdin:
             draw.text((start_time,thread_id + offset), "CI", (0,0,0), font=fontSmall)
         elif eventKey[event_type]=="MUTEX_INIT":
             draw.text((start_time,thread_id + offset), "MI", (0,0,0), font=fontSmall)
+        elif eventKey[event_type]=="TX_START":
+            draw.text((start_time,thread_id + offset), "BTx", (0,0,0), font=fontSmall)
+        elif eventKey[event_type]=="TX_END":
+            draw.text((start_time,thread_id + offset), "ETx", (0,0,0), font=fontSmall)
             
         else:
             draw.line([start_time,thread_id,end_time,thread_id], fill=colors[eventKey[event_type]], width=40)
