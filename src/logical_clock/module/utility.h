@@ -95,4 +95,20 @@
     (listarray_count(group_info->active_threads)==1 && group_info->clocks[__current_tid()].inactive==0)
 
 
+/*functions for managing the overflow budget...which makes sure that we don't overflow too much*/
+
+#define __set_overflow_budget(group_info,ticks)                 \
+    group_info->clocks[__current_tid()].overflow_budget=ticks;
+
+#define __inc_overflow_budget(group_info,ticks)                 \
+    group_info->clocks[__current_tid()].overflow_budget+=ticks;
+
+#define __dec_overflow_budget(group_info,ticks)                 \
+    group_info->clocks[__current_tid()].overflow_budget-=ticks;
+
+#define __get_overflow_budget(group_info)\
+    (group_info->clocks[__current_tid()].overflow_budget)
+
+/********end of overflow budget functions******************************/
+
 #endif

@@ -212,7 +212,9 @@ void task_clock_overflow_handler(struct task_clock_group_info * group_info, stru
       if (result){
           __add_debug_sync_points(group_info->clocks[__current_tid()].local_sync_barrier_clock, __current_tid());
       }
-  }  
+  }
+
+  __dec_overflow_budget(group_info,OVERFLOW_BUDGET_COST);
 }
 
 void __set_current_thread_to_lowest(struct task_clock_group_info * group_info){
@@ -363,6 +365,8 @@ void task_clock_on_enable(struct task_clock_group_info * group_info){
     if (lowest_tid>=0){           
         __wake_up_waiting_thread(group_info, lowest_tid);
     }
+    //reset the overflow budget to allow for one overflow
+    __set_overflow_budget(group_info,OVERFLOW_BUDGET_COST);
 }
 
 void __init_task_clock_entries(struct task_clock_group_info * group_info){
@@ -439,7 +443,7 @@ void task_clock_entry_init(struct task_clock_group_info * group_info, struct per
     }
     current->task_clock.group_info=group_info;
     current->task_clock.user_status->hwc_idx=-1;
-
+    __set_overflow_budget(group_info,OVERFLOW_BUDGET_COST);
 #if defined(DEBUG_TASK_CLOCK_COARSE_GRAINED)
   printk(KERN_EMERG "TASK CLOCK: INIT, tid %d event is %p....ticks are %llu \n", 
          current->task_clock.tid, event, __get_clock_ticks(group_info, current->task_clock.tid));
@@ -457,6 +461,7 @@ struct task_clock_group_info * task_clock_group_init(void){
   group_info->user_status_arr=NULL;
   group_info->active_threads = kmalloc(sizeof(struct listarray), GFP_KERNEL);
   group_info->global_sync_barrier_clock=0;
+  group_info->wakeup_target=0;
   listarray_init(group_info->active_threads);
   __init_task_clock_entries(group_info);
   init_irq_work(&group_info->pending_work, __task_clock_notify_waiting_threads_irq);

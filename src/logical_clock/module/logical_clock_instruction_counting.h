@@ -34,8 +34,19 @@
 
 #ifndef MIN_CLOCK_SAMPLE_PERIOD
 //whats the minimum overflow period
-#define MIN_CLOCK_SAMPLE_PERIOD 1000
+#define MIN_CLOCK_SAMPLE_PERIOD 20000
 #endif
+
+#ifndef CLOCK_INCREMENT
+//whats the minimum overflow period
+#define CLOCK_INCREMENT 10000
+#endif
+
+#ifndef MIN_TARGETED_SAMPLE_PERIOD
+//whats the minimum overflow period
+#define MIN_TARGETED_SAMPLE_PERIOD 1000
+#endif
+
 
 //The value bits in the counter...this is very much model specific
 #define X86_CNT_VAL_BITS 48
@@ -48,6 +59,8 @@
 #define SYNC_CLOCKS_INTERVAL_WAIT_RANGE 25000
 
 #define SYNC_CLOCKS_MAX_WAIT 25000
+
+#define OVERFLOW_BUDGET_COST 20000
 
 #define USE_SYNC_POINT 1
 
@@ -125,9 +138,22 @@ static inline void logical_clock_sync_point_arrive(struct task_clock_group_info 
 #endif
 /*******end of syncing functions*****/
 
+//does the current period fit into our budget?
+static inline uint64_t __overflow_budget_check(struct task_clock_group_info * group_info, uint64_t period){
+    
+    //can we afford this overflow?
+    if (__get_overflow_budget(group_info) + period > OVERFLOW_BUDGET_COST){
+        return period;
+    }
+    else{
+        return OVERFLOW_BUDGET_COST;
+    }
+}
+
 static inline void logical_clock_update_clock_ticks(struct task_clock_group_info * group_info, int tid){
-    unsigned long rawcount = local64_read(&group_info->clocks[tid].event->count); 
-    __inc_clock_ticks(group_info, tid, rawcount);
+    unsigned long count = local64_read(&group_info->clocks[tid].event->count); 
+    __inc_clock_ticks(group_info, tid, count);
+    __inc_overflow_budget(group_info,count);
     local64_set(&group_info->clocks[tid].event->count, 0);
 }
 
@@ -184,6 +210,7 @@ static inline void logical_clock_read_clock_and_update(struct task_clock_group_i
     if (counter_was_on){
         //add it to our current clock
         __inc_clock_ticks(group_info, id, delta);
+        __inc_overflow_budget(group_info,delta);
     }
 }
 
@@ -229,9 +256,10 @@ static inline void logical_clock_update_overflow_period(struct task_clock_group_
 #ifdef USE_ADAPTIVE_OVERFLOW_PERIOD
     uint64_t lowest_waiting_tid_clock, new_sample_period;
     int32_t lowest_waiting_tid=0;
-
+    uint64_t global_target;
+    
     //only do this if the remaining ticks is very low, just in case we ended up here "early"
-    if (local64_read(&group_info->clocks[id].event->hw.period_left) < -(MIN_CLOCK_SAMPLE_PERIOD/2)){
+    if (local64_read(&group_info->clocks[id].event->hw.period_left) > -(MIN_CLOCK_SAMPLE_PERIOD/2)){
         myclock = __get_clock_ticks(group_info,id);
         if (__single_stepping_on(group_info, id) || __hit_bounded_fence()){
             //this shouldn't matter...as we're single stepping now or about to end a bounded chunk. Just set it to something that won't overflow
@@ -239,21 +267,36 @@ static inline void logical_clock_update_overflow_period(struct task_clock_group_
             group_info->clocks[id].event->hw.sample_period = IMPRECISE_BOUNDED_CHUNK_SIZE;
         }
         else{
-            new_sample_period=group_info->clocks[id].event->hw.sample_period+10000;
-            lowest_waiting_tid = __search_for_lowest_waiting_exclude_current(group_info, id);
-            if (lowest_waiting_tid>=0){
-                lowest_waiting_tid_clock = __get_clock_ticks(group_info,lowest_waiting_tid);
-                //if there is a waiting thread, and its clock is larger than ours, stop when we get there
-                if (lowest_waiting_tid_clock > myclock){
-                    new_sample_period=__max(lowest_waiting_tid_clock - myclock + IMPRECISE_OVERFLOW_BUFFER, MIN_CLOCK_SAMPLE_PERIOD);
+            new_sample_period=group_info->clocks[id].event->hw.sample_period+CLOCK_INCREMENT;
+            if (__get_overflow_budget(group_info) >= OVERFLOW_BUDGET_COST){
+                lowest_waiting_tid = __search_for_lowest_waiting_exclude_current(group_info, id);
+                if (lowest_waiting_tid>=0){
+                    lowest_waiting_tid_clock = __get_clock_ticks(group_info,lowest_waiting_tid);
+                    //if there is a waiting thread, and its clock is larger than ours, stop when we get there
+                    if (lowest_waiting_tid_clock > myclock){
+                        //get the current global target
+                        global_target=group_info->wakeup_target;
+                        //if the global target is less than the waiting clock, no one has targeted this yet
+                        if (global_target < lowest_waiting_tid_clock){
+                            //try and set the global target
+                            if (cmpxchg(&group_info->wakeup_target, global_target, lowest_waiting_tid_clock)==global_target){
+                                //we've successfully targeted a thread...
+                                new_sample_period=__max(lowest_waiting_tid_clock - myclock + IMPRECISE_OVERFLOW_BUFFER, MIN_TARGETED_SAMPLE_PERIOD);
+                            }
+                        }
+                    }
                 }
             }
-            group_info->clocks[id].event->hw.sample_period=__target_sync_point(myclock,
-                                                                               __min(__bound_overflow_period(group_info, id, new_sample_period), MAX_CLOCK_SAMPLE_PERIOD));
+            //we set the new period while keeping in mind our budget, the sync point, the min period and the bound (if enabled)
+            group_info->clocks[id].event->hw.sample_period=__overflow_budget_check(group_info,
+                                                                                   __target_sync_point(myclock,
+                                                                                              __min(
+                                                                                                    __bound_overflow_period(
+                                                                                                                            group_info, id, new_sample_period),
+                                                                                                    MAX_CLOCK_SAMPLE_PERIOD)));
         }
         local64_set(&group_info->clocks[id].event->hw.period_left, 0);
     }
-
 #endif
 }
 
