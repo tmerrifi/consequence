@@ -174,6 +174,7 @@ void task_clock_entry_overflow_update_period(struct task_clock_group_info * grou
     unsigned long flags;
     //if we don't want to count ticks...don't do any of this work.
     if (!__tick_counter_is_running(group_info)){
+        logical_clock_reset_overflow_period_clock_disabled(group_info, __current_tid());
         return;
     }
     logical_clock_update_clock_ticks(group_info, __current_tid());
@@ -187,6 +188,7 @@ void task_clock_overflow_handler(struct task_clock_group_info * group_info, stru
 
   //if we don't want to count ticks...don't do any of this work.
   if (!__tick_counter_is_running(group_info)){
+      logical_clock_reset_overflow_period_clock_disabled(group_info, __current_tid());
       return;
   }
 

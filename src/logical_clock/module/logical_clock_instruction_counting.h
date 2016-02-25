@@ -300,6 +300,16 @@ static inline void logical_clock_update_overflow_period(struct task_clock_group_
 #endif
 }
 
+static inline void logical_clock_reset_overflow_period_clock_disabled(struct task_clock_group_info * group_info, int id){
+#ifdef USE_ADAPTIVE_OVERFLOW_PERIOD
+    if (group_info->clocks[id].event->hw.sample_period < MIN_CLOCK_SAMPLE_PERIOD){
+        group_info->clocks[current->task_clock.tid].event->hw.sample_period=MAX_CLOCK_SAMPLE_PERIOD;
+        local64_set(&group_info->clocks[current->task_clock.tid].event->hw.period_left,0);
+    }
+#endif
+}
+
+
 static inline void logical_clock_reset_overflow_period(struct task_clock_group_info * group_info, int id){
 #ifdef USE_ADAPTIVE_OVERFLOW_PERIOD
     group_info->clocks[current->task_clock.tid].event->hw.sample_period=MIN_CLOCK_SAMPLE_PERIOD;
