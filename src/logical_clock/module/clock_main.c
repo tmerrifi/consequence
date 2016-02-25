@@ -56,39 +56,6 @@
 MODULE_LICENSE("GPL");
 
 
-#ifdef USE_SYNC_POINT
-
-#define DEBUG_SYNC_POINTS_NUM 256
-#define DEBUG_SYNC_POINTS_THREADS 8
-
-struct __debug_sync_points{
-    uint64_t points[DEBUG_SYNC_POINTS_NUM];
-    int counter;
-}sync_points[DEBUG_SYNC_POINTS_THREADS];
-
-void __add_debug_sync_points(uint64_t value, int tid){
-    if (sync_points[tid].counter < DEBUG_SYNC_POINTS_NUM){
-        sync_points[tid].points[sync_points[tid].counter++]=value;
-    }
-}
-
-
-void __print_debug_sync_points(){
-    int i,j;
-    for (i=0;i<DEBUG_SYNC_POINTS_THREADS;i++){
-        for (j=0;j<sync_points[i].counter;j++){
-            printk(KERN_EMERG "t: %d %lld\n", i, sync_points[i].points[j]);
-        }
-    }
-}
-
-#else
-
-void __add_debug_sync_points(uint64_t value, int tid){}
-
-
-#endif
-
 //after we execute this function, a new lowest task clock has been determined
 int32_t __new_lowest(struct task_clock_group_info * group_info, int32_t tid){
   int32_t new_low=-1;
@@ -209,11 +176,7 @@ void task_clock_overflow_handler(struct task_clock_group_info * group_info, stru
   //did we hit a sync point???
   if (logical_clock_should_sync_clocks(group_info, __current_tid())){
       //if so, lets wait and sync up
-      int result=logical_clock_sync_point_arrive(group_info);
-      //debugging stuff
-      if (result){
-          __add_debug_sync_points(group_info->clocks[__current_tid()].local_sync_barrier_clock, __current_tid());
-      }
+      logical_clock_sync_point_arrive(group_info);
   }
 
   __dec_overflow_budget(group_info,OVERFLOW_BUDGET_COST);
@@ -694,10 +657,6 @@ int init_module(void)
     task_clock_func.task_clock_entry_is_singlestep=NULL;
 #endif
 
-#ifdef USE_SYNC_POINT
-    memset(sync_points, 0, sizeof(struct __debug_sync_points)*DEBUG_SYNC_POINTS_THREADS);
-#endif
-    
   return 0;
 }
 
@@ -721,9 +680,4 @@ void cleanup_module(void)
   task_clock_func.task_clock_entry_is_singlestep=NULL;
   task_clock_func.task_clock_entry_read_clock=NULL;
 
-  #ifdef USE_SYNC_POINT
-
-  #endif
-
-  
 }
