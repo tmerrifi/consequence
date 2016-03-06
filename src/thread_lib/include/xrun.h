@@ -337,6 +337,7 @@ public:
     putToken();
               
     determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
+    determ::getInstance().active_threads_inc();
     return (_thread_index);
   }
 
@@ -365,7 +366,7 @@ public:
       alive=false;
       //the token is released in here....
       determ::getInstance().deregisterThread(_thread_index);
-      
+      determ::getInstance().active_threads_dec();
   }
 
     static inline void finalThreadExit(void){
@@ -669,7 +670,7 @@ public:
           wait_cycles = determ_task_clock_read_cycle_counter() - start_cycles;
 #endif
           //fast forward our clock
-          determ_task_clock_add_ticks_lazy(fast_forward_clock() + TOKEN_ACQ_ADD_CLOCK);
+          determ_task_clock_add_ticks_lazy(fast_forward_clock() + (TOKEN_ACQ_ADD_CLOCK * determ::getInstance().active_threads_get()));
           _token_holding=true;
           //we just got out of a coarsened tx...should we increase or decrease the granularity?
           if (tx_monitor_next){
@@ -802,7 +803,6 @@ public:
         //should we use the tx coarsening?
         bool isUsingTxCoarsening= !isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
     retry:
-
         //if we are using kendo, we have to keep retrying and incrementing
         //if we aren't using kendo, this is just initialized to zero
         int ticks_to_add=0;
@@ -815,6 +815,7 @@ public:
             !(_speculation->isSpeculating()==false && _lock_count>1) ){
             //Here we begin or continue speculation...in the event that a speculation is reverted we will
             //return false and continue on
+            unsigned long long cycle_begin=__rdtsc();
 #ifdef NO_DETERM_SYNC
             if (_speculation->speculate(mutex,get_ticks_for_speculation(), speculation::SPEC_ENTRY_LOCK)==true){
 #else
@@ -946,17 +947,21 @@ public:
 
     static void mutex_lock(pthread_mutex_t * mutex) {
         timespec t1,t2;
+        unsigned long long start;
+        //start=__rdtsc();
         characterize_lock_count++;
         bool isSpeculating = _speculation->isSpeculating();
         stopClock();
 
         //**************DEBUG CODE**************
+#ifdef EVENT_VIEWER
         if (isSpeculating){
             determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
         }
         
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
         determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_LOCK, mutex);
+#endif
         //*************END DEBUG CODE*********************
 
 #ifdef USE_TAGGING
@@ -967,7 +972,9 @@ public:
         cout << "mutex lock " << _thread_index << " " << determ_task_clock_read() << " pid " << getpid() << " " << mutex << endl;
 #endif
         //**************DEBUG CODE**************
+#ifdef EVENT_VIEWER
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
+#endif
         //*************END DEBUG CODE*********************
 
         
@@ -981,32 +988,34 @@ public:
         }
         
         //*****DEBUG CODE************************/
+#ifdef EVENT_VIEWER
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
-        //******************************************/
-
-        //**************DEBUG CODE*********************
-        determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, mutex);        
+        determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, mutex);
+#endif
         //*************END DEBUG CODE*********************
 
+        /*        if (_thread_index==1 && start % 50 == 0){
+            cout << "lockacq: " << __rdtsc() - start << endl;
+            }*/
     }
 
 
   static void mutex_unlock(pthread_mutex_t * mutex) {
+      unsigned long long start;
+      //start=__rdtsc();
       stopClock((size_t)mutex);
       //**************DEBUG CODE**************
+#ifdef EVENT_VIEWER
       if (_speculation->isSpeculating()){
           determ::getInstance().add_event_commit_stats(_thread_index, 0, 0, 0, (xmemory::get_dirty_pages() - spec_dirty_count) );
       }
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_UNLOCK, mutex);
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
+#endif
       //*************END DEBUG CODE*********************
       bool isSpeculating=_speculation->isSpeculating();
-      bool isSingleActiveThread=!isSpeculating && singleActiveThread();
-      bool isUsingTxCoarsening=!isSpeculating && useTxCoarsening(0);
-      bool finishCommit=false;
-      
-      
+            
       assert(_lock_count>0);
       _lock_count--;
 #ifdef DTHREADS_TASKCLOCK_DEBUG
@@ -1017,26 +1026,24 @@ public:
           //_speculation->updateTicks();
           //we want to notify the speculation engine that we have released this lock
           _speculation->endSpeculativeEntry(mutex);
-                //*****DEBUG CODE************************/
+          //*****DEBUG CODE************************/
+#ifdef EVENT_VIEWER
           determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
-          //******************************************/
           determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_UNLOCK, mutex);
-          //**************DEBUG CODE**************
           determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
-          //*************END DEBUG CODE*********************
-          int dirty_pages_ticks=0;
-          if (xmemory::get_dirty_pages() > spec_dirty_count){
-              dirty_pages_ticks=(xmemory::get_dirty_pages() - spec_dirty_count)*LOGICAL_CLOCK_CONVERSION_COW_PF;
-              spec_dirty_count=xmemory::get_dirty_pages();
-          }
-#ifdef TOKEN_ORDER_ROUND_ROBIN
-          determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY+dirty_pages_ticks);
-#else
-          determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK+dirty_pages_ticks);
 #endif
+          //*************END DEBUG CODE*********************
+          //if (_thread_index==1 && start % 50 == 0){
+          //  cout << "unlock: " << __rdtsc() - start << endl;
+          //}
+
           return;
       }
 
+      bool isSingleActiveThread=!isSpeculating && singleActiveThread();
+      bool isUsingTxCoarsening=!isSpeculating && useTxCoarsening(0);
+      bool finishCommit=false;
+      
       //*****DEBUG CODE************************/
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
       //******************************************/

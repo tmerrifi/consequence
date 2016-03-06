@@ -342,6 +342,8 @@ private:
   //in line may no longer be. we set this flag when ever we activate someone
   volatile u_int64_t _activation_counter;
 
+  volatile u_int64_t active_thread_count;
+  
   unsigned long total_time;
   unsigned long total_commit_time;
   unsigned long total_wait_time;
@@ -384,7 +386,8 @@ private:
       master_thread_finished(false),
       variable_counter(0),
       token_acq_count(0),
-      seq_num(0)
+      seq_num(0),
+      active_thread_count(0)
           {  }
   
 public:
@@ -449,6 +452,20 @@ public:
       return master_thread_finished;
   }
 
+  void active_threads_inc(){
+      assert(active_thread_count < MAX_THREADS-1);
+      active_thread_count++;
+  }
+
+  void active_threads_dec(){
+      assert(active_thread_count>0);
+      active_thread_count--;
+  }
+
+  uint64_t active_threads_get(){
+      return active_thread_count;
+  }
+  
   void print_total_commit_time(){
     cout << "total commit time: " << total_commit_time << " " << commits << endl;
     cout << "total wait: " << total_wait_time << endl;

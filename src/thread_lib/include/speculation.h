@@ -347,24 +347,7 @@ class speculation{
             ftrace_off(tracer);
         }
 #endif //END FTRACE
-
         
-        if (return_val==false && entries_count>3){
-            long long count;
-            determ_task_clock_force_read();
-            updateTicks();
-            clock_gettime(CLOCK_REALTIME, &tx_end_time);
-            unsigned long diff = time_util_time_diff(&tx_start_time, &tx_end_time);
-#ifdef USE_DEBUG_COUNTER
-            perfcounterlib_stop(perf_counter);
-            perfcounterlib_read(perf_counter, &count);
-#endif
-            /*cout << "TXENDING: " << seq_num << " " << tid << " " << ticks << " " <<
-                diff << " " << ticks/diff <<
-                " " << count << " " << determ_debug_notifying_sample_read() << endl;*/
-         }
-            
-
         return return_val;
     }
     
@@ -493,6 +476,7 @@ class speculation{
              //cout << "committing tid: " << tid << " " << entry << " " << logical_clock << endl;
 
          }
+
          entries_count=0;
          buffered_signal=false;
          signal_delay_ticks=0;
