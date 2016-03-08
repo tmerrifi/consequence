@@ -30,6 +30,9 @@ ifdef maxperiod
 	CLOCK_MODULE_FLAGS += -DMAX_CLOCK_SAMPLE_PERIOD=$(maxperiod)
 endif
 
+ifdef clockinc
+	CLOCK_MODULE_FLAGS += -DCLOCK_INCREMENT=$(clockinc)
+endif
 
 #CLOCK_MODULE_FLAGS += -DMIN_CLOCK_SAMPLE_PERIOD=20000
 
