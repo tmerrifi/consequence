@@ -473,8 +473,6 @@ class speculation{
              
              entry->last_committed=logical_clock;
              entry->committed_by=tid;
-             //cout << "committing tid: " << tid << " " << entry << " " << logical_clock << endl;
-
          }
 
          entries_count=0;
@@ -482,11 +480,7 @@ class speculation{
          signal_delay_ticks=0;
          _checkpoint.is_speculating=false;
          ticks=0;
-         seq_num++;
-         
-         /*if (!learning_phase && (seq_num % SPEC_LEARNING_PHASE_FREQ) == 0){
-             learning_phase=true;
-             }*/
+         seq_num++;         
      }
 
      void updateLastCommittedTime(void * entry_ptr, uint64_t logical_clock){
