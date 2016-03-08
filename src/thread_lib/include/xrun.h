@@ -1328,6 +1328,34 @@ public:
   }
 
 
+    static void beginSysCallDeactivate(){
+        cout << "deactivating 1... " << " " << _initialized << " " << alive << " " << determ_task_clock_read() << endl;
+      if (_initialized && alive){
+          cout << "deactivating 2... " << determ_task_clock_read() << endl;
+          stopClockForceEnd();
+          bool acquiringToken=(!_token_holding);
+          if (acquiringToken){
+              waitToken();
+          }          
+          commitAndUpdateMemoryTerminateSpeculation();
+          endTXCoarsening();
+          determ_task_clock_halt();
+          putToken();
+          cout << "deactivating 3... " << determ_task_clock_read() << endl;
+      }
+  }
+
+
+  static void endSysCallActivate(){
+      if (_initialized && alive){
+          determ_task_clock_activate();
+          determ_task_clock_on_wakeup();
+          startClock();
+      }
+  }
+
+
+  
   static void commitAndUpdateMemory(){
       assert(!_speculation->isSpeculating());
       commitAndUpdateMemory(NULL);
