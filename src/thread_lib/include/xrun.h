@@ -126,7 +126,7 @@ public:
     _speculation = new (buf) speculation(0);
     buf = mmap(NULL, sizeof(debug_user_memory), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     debug_mem = new (buf) debug_user_memory(0);
-    alive=false;
+    alive=true;
     reverts=0;
     spec_dirty_count=0;
     locks_elided=0;
@@ -792,17 +792,18 @@ public:
     }
 
     static void __mutex_lock_inner(pthread_mutex_t * mutex, bool allow_coarsening) {
+        //unsigned long long cycle_begin=__rdtsc();
         struct local_copy_stats cs;
         int wasSpeculating=0;
         bool finishCommit=false;
         bool isSingleActiveThread=false;
         int failure_count=0;
         int stack_lock_count=++_lock_count;
-        bool isSpeculating=_speculation->isSpeculating();
 
+    retry:
+        bool isSpeculating=_speculation->isSpeculating();
         //should we use the tx coarsening?
         bool isUsingTxCoarsening= !isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
-    retry:
         //if we are using kendo, we have to keep retrying and incrementing
         //if we aren't using kendo, this is just initialized to zero
         int ticks_to_add=0;
@@ -811,11 +812,11 @@ public:
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
         if (!isUsingTxCoarsening && (failure_count==0) &&
-            _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult) &&
-            !(_speculation->isSpeculating()==false && _lock_count>1) ){
+            !(isSpeculating==false && _lock_count>1) &&
+            _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult)){
+            
             //Here we begin or continue speculation...in the event that a speculation is reverted we will
             //return false and continue on
-            unsigned long long cycle_begin=__rdtsc();
 #ifdef NO_DETERM_SYNC
             if (_speculation->speculate(mutex,get_ticks_for_speculation(), speculation::SPEC_ENTRY_LOCK)==true){
 #else
@@ -829,17 +830,20 @@ public:
                     //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
                 }
                 //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_LOCK, mutex);
-                int dirty_pages_ticks=0;
+                //int dirty_pages_ticks=0;
                 //did we get some dirty pages? Don't do this on the first time through
-                if (isSpeculating && xmemory::get_dirty_pages() > spec_dirty_count){
-                    dirty_pages_ticks=(xmemory::get_dirty_pages() - spec_dirty_count)*LOGICAL_CLOCK_CONVERSION_COW_PF;
-                    spec_dirty_count=xmemory::get_dirty_pages();
-                }
-#ifdef TOKEN_ORDER_ROUND_ROBIN
-                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY+dirty_pages_ticks);
-#else
-                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK+dirty_pages_ticks);
-#endif
+                //if (isSpeculating && xmemory::get_dirty_pages() > spec_dirty_count){
+                //  dirty_pages_ticks=(xmemory::get_dirty_pages() - spec_dirty_count)*LOGICAL_CLOCK_CONVERSION_COW_PF;
+                //  spec_dirty_count=xmemory::get_dirty_pages();
+                //}
+                //#ifdef TOKEN_ORDER_ROUND_ROBIN
+                //                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_ROUND_ROBIN_INFINITY+dirty_pages_ticks);
+                //#else
+                //                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK+dirty_pages_ticks);
+                //#endif
+                /*if (_thread_index==2 && cycle_begin%10==0){
+                    cout << "lock cycles: " << __rdtsc() - cycle_begin << endl;
+                    }*/
                 return;
             }
             else{
@@ -874,7 +878,8 @@ public:
             int locks_elided_tmp=_speculation->getEntriesCount();
             locks_elided+=locks_elided_tmp;
             //DEBUG_TYPE_SPECULATIVE_COMMIT
-            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_COMMIT, (void *)locks_elided_tmp);  
+            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_COMMIT, (void *)locks_elided_tmp);
+            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_TX_ENDING, NULL);  
             _speculation->commitSpeculation(get_ticks_for_speculation());
             xmemory::end_speculation();
             commitAndUpdateMemoryParallelBegin();
