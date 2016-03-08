@@ -402,9 +402,24 @@ ssize_t read(int fd, void *buf, size_t count) {
 
 
     
-    //void perror ( const char * str ){
-    //    cout << str << endl;
-    //}
+    void perror ( const char * str ){
+        cout << str << endl;
+    }
+
+    int nanosleep(const struct timespec * rec, struct timespec * rem){
+        cout << "in nano sleep..." << endl;
+        xrun::beginSysCallDeactivate();
+        int result=WRAP(nanosleep)(rec, rem);
+        xrun::endSysCallActivate();
+        return result;
+    }
+
+    unsigned int sleep(unsigned int secs){
+        xrun::beginSysCallDeactivate();
+        int result=WRAP(sleep)(secs);
+        xrun::endSysCallActivate();
+        return result;
+    }
     
   // DISABLED
 #if 0

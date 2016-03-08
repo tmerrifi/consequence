@@ -49,6 +49,10 @@ extern int (*WRAP(pthread_barrier_init))(pthread_barrier_t*, pthread_barrierattr
 extern int (*WRAP(pthread_barrier_wait))(pthread_barrier_t*);
 extern int (*WRAP(pthread_barrier_destroy))(pthread_barrier_t*);
 
+extern int (*WRAP(nanosleep))(const struct timespec *, struct timespec *);
+extern unsigned int (*WRAP(sleep))(unsigned int);
+
+
 void init_real_functions();
 
 #endif
