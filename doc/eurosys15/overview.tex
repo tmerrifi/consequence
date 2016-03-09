@@ -1,0 +1,19 @@
+\section{\Lib{} Architecture}
+
+%Synchronization operations like {\tt lock()} and {\tt unlock()}, however, require global coordination. If, as in \autoref{f:local-global}, two threads attempt to perform a {\tt lock()} at the same time, the operations will be deterministically serialized even if the {\tt lock()} calls operate on different locks. 
+%One thread can perform local work while another is doing a global operation, however. 
+%Thus, the performance of any TSO system can be said to depend on three factors: (a) overhead on local work due to memory isolation and logical clock maintenance, incurred by each thread during its parallel execution or just prior to global coordination; (b) overhead of merging updates which makes global coordination slower; and (c) delays in the transition between local and global phases, due to suboptimal ordering. 
+
+%  The serial phases, meanwhile, are globally serialized and deterministically ordered. Thus, a critical section in \lib{} consists of two serial phases, one each for the {\tt lock()} and {\tt unlock()} operations, and a critical section where the thread operates on its local version. 
+% The serial phase that then follows, communicates any changes made to the other threads. 
+
+%In \lib{}, one thread may be performing local work while another is doing a global operation, but to preserve determinism, threads must respect the order in which they enter the serial phase. 
+
+%Since \lib{} implements TSO, all writes need to appear in a total order that all threads agree on irrespective of which locks were held at the time. Compared to more relaxed models TSO may increase the overhead of (b) global coordination as the set of changes communicated between threads is larger. However, overhead on (a) local work and (c) phase transitions remain unchanged with weaker consistency models. Thus, the additional work done to merge updates is the ``performance tax'' of retaining the TSO consistency model.
+
+%It is important to note that an increase in the duration of the global coordination phase has one of two outcomes. If many threads are attempting global coordination simultaneously, making global coordination slower directly impacts the waiting threads and overall performance. Alternatively, if the global phase is not congested, performance need not be significantly impacted. Instead, slower global coordination may merely bring the system closer to the congested state.
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "paper.tex"
+%%% End:

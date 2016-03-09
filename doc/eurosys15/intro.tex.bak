@@ -1,0 +1,45 @@
+\section{Introduction}
+
+With multi-core processors comes the need for parallel programs. 
+%Along with the profusion of multi-core processors over the last decade has come the need for parallel software that can take advantage of these new architectures. 
+%Unfortunately, writing parallel software that is both correct and performs well is hard still an open challenge. 
+%Writing sequential software that is correct and performs well is hard enough.
+Unfortunately, writing parallel programs is hard. 
+On top of the difficulties of writing correct sequential programs, parallelism brings nondeterminism which undermines our ability to debug, test and understand our programs.
+
+%In recent years many researchers have proposed ways to execute general parallel programs deterministically without sacrificing much parallelism or performance. 
+Research into deterministic concurrency seeks to alleviate these problems. %has seen much progress in recent years.
+While some initial proposals focused on the design of deterministic multi-core architectures \cite{devietti_dmp:_2009,devietti_rcdc:_2011,derek_r._hower_calvin:_2011}, subsequent work has demonstrated practical pure-software implementations of determinism  \cite{liu_dthreads:_2011,merrifield_conversion:_2013,kai_lu_efficient_2014}.
+
+One of the central techniques for improving performance in both hardware and software deterministic systems has been relaxing the memory consistency model. While initial proposals adopted strong consistency models like sequential consistency \cite{devietti_dmp:_2009} and total store order (TSO) \cite{bergan_coredet:_2010}, subsequent work relies on extremely relaxed consistency models like DRF0 \cite{devietti_rcdc:_2011} and lazy release consistency (LRC) \cite{kai_lu_efficient_2014} to reduce inter-thread communication and thus improve performance.
+%for good performance.% Weakening the consistency model admits better scalability by allowing memory fences to coordinate with a subset of threads instead of with all threads \cite{devietti_rcdc:_2011,kai_lu_efficient_2014}. 
+%Relaxed consistency allows fences to perform localized work instead of the global coordination required by strong consistency models. 
+However, all deterministic execution systems, relaxed consistency or not, require global ordering of inter-thread communication, a likely bottleneck in any deterministic concurrency system. 
+%This can be abstracted as a deterministic logical clock (DLC), based on synchronization operations \cite{liu_dthreads:_2011} or instruction counting \cite{olszewski_kendo:_2009, devietti_dmp:_2009}, where the thread with the lowest clock has priority.
+%Our system, \lib, also implements a deterministic logical clock which inherently requires global coordination (\S\ref{s:dlc}). 
+%Our insight is that optimizing the implementation of memory fences is of limited benefit when other global bottlenecks remain. 
+We argue that while this bottleneck remains, relaxing the consistency model is of limited benefit. 
+Moreover, the adoption of an extremely relaxed consistency model is not free. Supporting LRC, as \cite{kai_lu_efficient_2014} does, suffers from high space overheads that hinder scalability. The programmability challenges inherent in relaxed consistency are also well-known, and can result in unintuitive behavior \cite{adve_data_2010,batty_mathematizing_2011}. Finally, some current hardware memory consistency models like x86 are not as relaxed as LRC. Moving to a weaker consistency model breaks compatibility with existing binaries. In contrast, a system that offers consistency guarantees compatible with modern architectures can support legacy binaries simply by replacing the pthreads library.
+
+% The core issue is that a program that "works" on TSO can break on LRC. Consider flag-based synchronization with locking where the sender uses lock A and the receiver uses (by mistake) lock B. Due to the global nature of commits, this will still work on TSO but will deadlock on LRC. There's a data race in the program so any semantics are permissible, but there is a practical consideration as well that we shouldn't break code that already works.
+
+\lib demonstrates that a deterministic implementation of TSO, a relatively strong consistency model that is compatible with all modern hardware platforms, can perform well across a range of workloads. The primary contributions of this paper are:
+\begin{itemize}
+%\item We identify that deterministic synchronization is a global bottleneck affecting all deterministic execution schemes, regardless of consistency model.
+\item We describe several TSO-compatible optimizations that target the same scenarios that relaxed consistency optimizes, reducing the scope for further improvements from relaxed consistency.
+\item We demonstrate deterministic adaptation to program behavior as a means of further improving performance.
+%\item We describe a novel implementation of deterministic locking that supports blocking instead of polling.
+\item We describe novel implementations of deterministic synchronization operations that are flexible and increase the parallelism of prior techniques.
+\item Finally, we demonstrate a deterministic implementation of TSO that achieves a 2.8x and 2.2x improvement over DThreads \cite{liu_dthreads:_2011} and DWC \cite{merrifield_conversion:_2013} (respectively) on the five most challenging benchmark programs.
+
+
+\end{itemize}
+While determinism can simplify parallel programming, using complicated memory consistency models to make determinism fast undercuts these programmability gains. \lib erases this tension by combining determinism and strong memory consistency.
+
+% PLACE HOLDER UNTIL WE HAVE A BETTER PRETTY CONCLUDING PARAGRAPH... 
+% Below, we describe and motivate the \lib{} design (\S\ref{s:perf}) and several key optimizations (\S\ref{s:optimizations}). \S\ref{s:sync} describes our deterministic synchronization operations, followed by evaluation (\S\ref{s:eval}), related work (\S\ref{s:related}) and conclusions (\S\ref{s:concl}). 
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "paper.tex"
+%%% End:

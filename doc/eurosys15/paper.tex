@@ -1,0 +1,188 @@
+%-----------------------------------------------------------------------------
+%
+%               Template for sigplanconf LaTeX Class
+%
+% Name:         sigplanconf-template.tex
+%
+% Purpose:      A template for sigplanconf.cls, which is a LaTeX 2e class
+%               file for SIGPLAN conference proceedings.
+%
+% Guide:        Refer to "Author's Guide to the ACM SIGPLAN Class,"
+%               sigplanconf-guide.pdf
+%
+% Author:       Paul C. Anagnostopoulos
+%               Windfall Software
+%               978 371-2316
+%               paul@windfall.com
+%
+% Created:      15 February 2005
+%
+%-----------------------------------------------------------------------------
+
+
+\documentclass[10pt]{sigplanconf}
+
+% The following \documentclass options may be useful:
+
+% preprint      Remove this option only once the paper is in final form.
+% 10pt          To set in 10-point type instead of 9-point.
+% 11pt          To set in 11-point type instead of 9-point.
+% authoryear    To obtain author/year citation style instead of numeric.
+
+\usepackage{epsfig,endnotes}
+\usepackage{xcolor}
+\usepackage{xspace}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{subfig}
+\usepackage{flushend}
+
+\begin{document}
+
+%\special{papersize=8.5in,11in}
+%\setlength{\pdfpageheight}{\paperheight}
+%\setlength{\pdfpagewidth}{\paperwidth}
+
+\conferenceinfo{EuroSys'15}{April 21--24, 2015, Bordeaux, France} 
+\copyrightyear{2015} 
+\copyrightdata{978-1-4503-3238-5/15/04} 
+\doi{2741948.2741960}
+
+% Uncomment one of the following two, if you are not going for the 
+% traditional copyright transfer agreement.
+
+\exclusivelicense                % ACM gets exclusive license to publish, 
+                                  % you retain copyright
+
+%\permissiontopublish             % ACM gets nonexclusive license to publish
+                                  % (paid open-access papers, 
+                                  % short abstracts)
+
+%\titlebanner{banner above paper title}        % These are ignored unless
+%\preprintfooter{short description of paper}   % 'preprint' option specified.
+
+\title{High-Performance Determinism with Total Store Order Consistency}
+%\title{C{\Large ONVERSION}: Multi-Version Concurrency Control for Main Memory Segments}
+%\subtitle{Subtitle Text, if any}
+
+\authorinfo{Timothy Merrifield}
+           {University of Illinois at Chicago}
+           {tmerri4@uic.edu}
+\authorinfo{Joseph Devietti}
+           {University of Pennsylvania}
+           {devietti@cis.upenn.edu}
+\authorinfo{Jakob Eriksson}
+           {University of Illinois at Chicago}
+           {jakob@uic.edu}
+
+
+\maketitle
+
+\newcommand{\checkout}{{\tt checkout()}}
+\newcommand{\settled}{{\tt commit()}}
+\newcommand{\settledm}{{\tt commit\_mutex()}}
+\newcommand{\update}{{\tt update()}}
+\newcommand{\updatem}{{\tt update\_mutex()}}
+\newcommand{\commit}{{\tt commit()}}
+\newcommand{\commitm}{{\tt commit\_mutex()}}
+\newcommand{\mksnap}{{\tt commit()}}
+\newcommand{\getsnap}{{\tt update()}}
+\newcommand{\fork}{{\tt fork}}
+\newcommand{\pte}{{\tt pte}}
+\newcommand{\determEnd}{{\tt determ\_end}}
+\newcommand{\pthread}{{\tt pthread}}
+
+
+\newcommand{\create}{{\tt pthread\_create}}
+\newcommand{\dthreads}{Dthreads}
+
+
+
+\newcommand{\conversion}{{\sc \small Conversion}}
+\newcommand{\lib}{{\sc \small Consequence}\xspace}
+\newcommand{\libnodet}{{\sc \small Consequence-NoDet}\xspace}
+\newcommand{\Lib}{{\sc \large Consequence}\xspace}
+
+\newcommand{\TODO}[1]{\textbf{\textcolor{red}{[ TODO: #1]}}}
+
+\begin{abstract}
+
+We present \lib{}, a deterministic multi-threading library. 
+\lib{} achieves deterministic execution via store buffering and strict ordering of synchronization operations.
+To ensure high performance under a wide variety of conditions, the ordering of synch operations is based on a deterministic clock \cite{olszewski_kendo:_2009}, 
+and store buffering is implemented using version-controlled memory \cite{merrifield_conversion:_2013}.
+
+Recent work on deterministic concurrency \cite{devietti_rcdc:_2011,kai_lu_efficient_2014} has proposed relaxing the consistency model beyond total store order (TSO). Through novel optimizations, \lib{} achieves the same or better performance on the Phoenix, PARSEC and SPLASH-2 benchmark suites, while retaining TSO memory consistency. Across 19 benchmark programs, \lib{} incurs a worst-case slowdown of 3.9$\times$ vs. pthreads, with 14 out of 19 programs at or below 2.5$\times$. We believe this performance improvement takes parallel programming one step closer to ``determinism by default.''
+
+%We believe this makes ``determinism by default'' a practical choice, without further relaxation of the memory model. 
+
+
+%the runtime performance of such methods is so far unclear, and memory requirements of 5--50$\times$ pthreads have been reported \cite{kai_lu_efficient_2014}. Meanwhile, we demonstrate that benchmark runtimes within $2.5\times$ of pthreads is achievable with TSO, given an abstract, optimal ordering. \TODO{no longer showing nodet numbers!}
+%Finally, we provide a concrete ordering that achieves a maximum slowdown of 3.1$\times$ vs. non-deterministic pthreads, across 12 benchmarks in the Phoenix and PARSEC benchmark suites. \TODO{this sentence relies on having nondet. Rewrite, and refresh all numbers, add SPLASH!}
+
+\end{abstract}
+
+
+\input{intro}
+\input{performance}
+%\input{background}
+%\input{overview}
+\input{optimizations}
+\input{algorithms}
+\input{eval}
+\input{future}
+\input{related}
+
+\section{Conclusion}
+\label{s:concl}
+With \lib we demonstrate that highly relaxed memory consistency is not necessary for high-performance deterministic execution; \lib achieves similarly good performance while retaining the stronger TSO consistency model. The performance benefits of relaxed consistency, which allow memory fences to be implemented as local operations, are attenuated by the fact that deterministic synchronization still requires global coordination. We identify performance optimizations for the TSO consistency model that reduce the cost of commits and that exploit adaptivity to program behavior while maintaining determinism. We plan to release the source code for our system to enable future researchers to duplicate and build upon our results.
+
+\section{Acknowledgments}
+
+This work was supported by the National Science Foundation under grants
+CNS-1320235 and XPS-1337174.
+
+
+%\category{CR-number}{subcategory}{third-level}
+
+% general terms are not compulsory anymore, 
+% you may leave them out
+%\terms
+%term1, term2
+
+%\keywords
+%keyword1, keyword2
+
+
+
+%\appendix
+%\section{Appendix Title}
+%This is the text of the appendix, if you need one.
+%\acks
+%Acknowledgments, if needed.
+
+% We recommend abbrvnat bibliography style.
+\bibliographystyle{consequence}
+
+\bibliography{consequence}
+
+% The bibliography should be embedded for final submission.
+
+%\begin{thebibliography}{}
+%\softraggedright
+
+%\bibitem[Smith et~al.(2009)Smith, Jones]{smith02}
+%P. Q. Smith, and X. Y. Jones. ...reference text...
+
+%\end{thebibliography}
+
+
+\end{document}
+
+%                       Revision History
+%                       -------- -------
+%  Date         Person  Ver.    Change
+%  ----         ------  ----    ------
+
+%  2013.06.29   TU      0.1--4  comments on permission/copyright notices
+

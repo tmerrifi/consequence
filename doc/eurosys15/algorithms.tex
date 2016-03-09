@@ -1,0 +1,161 @@
+
+
+
+
+
+
+% ======= STORE/BOX LISTINGS =======
+
+
+
+\newsavebox{\mutexUnlock}
+\begin{lrbox}{\mutexUnlock}% Store second listing
+\begin{lstlisting}
+void mutexUnlock(lock_t* l){
+	clockPause();
+	waitToken();
+	lockRelease(l)
+	if (!queueEmpty(l->waitQueue)){
+		int tid=remove(l->waitQueue);
+		wakeupThread(tid);
+	}
+	convCommitAndUpdateMem();
+	releaseToken();
+	clockResume();
+}
+\end{lstlisting}
+\end{lrbox}
+
+\newsavebox{\codeSample}
+\begin{lrbox}{\codeSample}% Store second listing
+\begin{lstlisting}
+int x=0;
+void * run (void * arg){
+	if (x==1)
+		x++;
+}
+int main(){
+	x=1;
+	pthread_t t1,t2;
+	pthread_create(&t1,NULL,run,NULL);
+	pthread_create(&t2,NULL,run,NULL);
+	pthread_join(t1,NULL);
+	pthread_join(t2,NULL);
+}
+\end{lstlisting}
+\end{lrbox}
+
+
+%\begin{figure}
+%\hspace*{.5cm}
+%\usebox{\codeSample}
+%\caption{A simplified implementation of token acquisition and release.}
+%\label{f:waitToken}
+%\end{figure}
+
+
+\section{Synchronization Primitives}
+\label{s:sync}
+
+\lib{} supports deterministic versions of mutual exclusion, conditional variables and barriers. As in previous systems \cite{olszewski_kendo:_2009,kai_lu_efficient_2014}, \lib{} uses the GMIC to deterministically order synchronization along with thread creation, exit and join events. Once a thread becomes the GMIC, it is eligible to acquire the \emph{global token} which is required to perform any deterministic event. The token is useful as both an abstraction for maintaining determinism as well as a means of relaxing the traditional GMIC invariant, necessary to perform the coarsening optimization (see \S\ref{s:optimizations}).
+
+
+\subsection{Mutual Exclusion}
+
+In Kendo \cite{olszewski_kendo:_2009}, in order to ensure progress for others and to avoid introducing deadlocks, a GMIC thread that failed to acquire a lock would repeatedly increment their logical clock by some value until they were no longer the GMIC. This approach suffers from two problems: 1) the choice of a sensible value to add to the clock while polling requires program-specific tuning and 2) many polling requests to check whether there is a new GMIC thread to notify adds needless latency. A better approach would allow the GMIC thread to block and wait for the lock to be released while continuing to ensure progress for others. We accomplish this by adding the ability for a thread to remove itself from GMIC consideration through the $clockDepart()$ function. 
+
+The $mutexLock()$ implementation (shown in Figure \ref{f:mutexLock}) begins by pausing the clock and acquiring the token via the $waitToken()$ function (shown in Figure \ref{f:waitToken}). If the lock is available (Figure \ref{f:mutexLock}, line 6), the thread commits its changes to memory and begins executing its critical section. However in the case of a held lock (Figure \ref{f:mutexLock}, line 10) the thread will remove itself from consideration for the GMIC and add itself to the lock's queue of waiters.
+
+\begin{figure}
+\hspace*{.5cm}
+\usebox{\mutexUnlock}
+\caption{mutexUnlock() implementation.}
+\label{f:mutexUnlock}
+\end{figure}
+
+
+Figure \ref{f:mutexUnlock} shows the implementation of $mutexUnlock()$. After pausing the clock and acquiring the token, we check to see if there are any threads waiting for the lock (Figure \ref{f:mutexUnlock}, line 5). If so, we remove the thread from the wait queue and invoke $wakeupThread()$ which activates the thread using a (non-deterministic) conditional variable and adds the thread back into consideration for the GMIC. \footnote{Our simplified code in Figure \ref{f:mutexUnlock} does not handle one case of potential non-determinism. If the newly activated thread is the GMIC, then we must pass the token to them directly to avoid potential non-determinism with the thread that was the GMIC thread prior to activation.}
+
+Note that, unlike in Kendo \cite{olszewski_kendo:_2009}, $mutexUnlock()$ must acquire the token, as it performs a commit. Kendo assumes that applications are data-race-free and thus enforces no isolation between threads.
+
+
+
+
+%Activating a thread in the manner described thus far can create a non-deterministic schedule. For example, a thread $T1$ with a logical clock $n$ is currently the GMIC and is waiting for the token to be released (line 7 of Figure \ref{f:waitToken}). If another thread $T2$ with a logical clock value of $n-1$ is activated by thread $T3$ using $wakeupThread()$ - once thread $T3$ releases the token it can be acquired by either $T1$ or $T2$. To resolve this non-determinism we add an additional shared variable: the \emph{activation sequence number}. Whenever a token-holder activates another thread (both when unlocking a mutex and signaling with a conditional variable), the sequence number is incremented (line 6 of Figure \ref{f:mutexUnlock}. After acquiring the token a thread must check that the sequence number has not changed (line 10 of Figure \ref{f:waitToken}); and if it has the thread must call $clockIsGlobalMinimum()$ again to ensure it is still the GMIC. 
+
+The techniques described above are also used to support deterministic conditional variables.
+
+\subsection{Barriers}
+
+\lib{} takes advantage of barrier semantics and \conversion{}'s parallel commit feature to improve performance. This is not to be confused with prior synchronous deterministic systems, which used \emph{internal} barriers to perform commits from different threads in parallel \cite{bergan_coredet:_2010,jooybar_gpudet:_2013}.
+
+In the case of multiple concurrent committers, \conversion{} may commit pages of memory in parallel through a two phase commit process. The first phase is done in serial, and %allows a thread to acquire ownership of a page, or simply register interest in the page if it is contended. In short, this phase 
+determines the order in which changes to each page will be committed. In the second phase, pages are then merged and committed in parallel.
+ The work done in phase two is several times larger than that of phase one, leading to better performance through parallelism. 
+See \cite{merrifield_conversion:_2013} for more details.
+
+%In order to exploit this mechanism and still maintain determinism, we separate the single commit operation into two separate operations that mirror the phases described above. 
+To guarantee a deterministic ordering for our barrier, threads hold the token during phase one. % access to phase one is ordered by token acquisition. % is preceded by token acquisition. %guarded by the deterministic logical clock. 
+%When each thread arrives at the barrier it first acquires the token, which establishes its deterministic order of arrival. %After establishing this {\it per-thread} ordering, each thread waits for all prior threads to finish phase one of the commit, thus establishing a {\it per-page} ordering. 
+%After this time, threads can safely perform the more costly second phase of the commit in parallel. 
+ After completing phase two in parallel, each thread waits at a non-deterministic (pthreads) barrier until all threads have finished committing. All threads then perform an update to get the latest version of memory.
+
+
+%While \conversion{} has the ability to commit unique blocks of memory (at a page granularity) in parallel, it does not support any mechanism for ensuring a deterministic order of commits. In order to provide both a deterministic \emph{and} parallel commit we add a $linearized\_version$ field to \conversion{}'s metadata accessible both in kernel space and user space. When \conversion{} begins a parallel commit it first acquires a lock and performs an operation which linearizes the commit before proceeding to do the actual commit work (see \cite{merrifield_conversion:_2013} for more details \TODO{on \conversion{}?}). By writing the new version number to the $linearized\_version$ field, a thread in user space can monitor this value and ensure they do not invoke $convCommitAndUpdateMem()$ until a previous version has been linearized.
+
+%\TODO{The below paragraph feels like we're skipping some crucial details. Would a figure help perhaps?}
+%We make use of this new feature in our barrier implementation as follows. When each thread arrives at the barrier it first acquires the token, which establishes its deterministic order of arrival. While holding the token, the thread reserves a future version $V_i$ of memory for their own commit and then releases the token.\footnote{The final thread arriving at the barrier will hold on to the token in order to prevent non-determinism from memory commits by threads not arriving at the barrier.}   The thread then monitors the $linearized\_version$ field, waiting until all versions $V_j$ s.t. $V_j<V_i$ have been linearized. Once this has occurred the thread can safely call $convCommitAndUpdateMem$ and commit its version. After this phase each thread waits at a non-deterministic barrier until all threads have finished their commit. At this time, a final update of memory is needed so that each thread gets the latest version of memory committed by the last thread in the barrier. 
+
+%
+%
+%
+%
+%
+%\begin{figure*}
+%\centering
+%
+%\begin{subfigure}[Figure A]{}
+%\begin{lstlisting}
+%void mutexLock(lock_t* l){
+%	clockPause();
+%retry:
+%	waitToken();
+%	bool gotLock=lockAcq(l)
+%	if (gotLock==true){;
+%		commitAndUpdateMem();
+%	}
+%	else{
+%		if (failed++ == 0)
+%			commitAndUpdateMem();
+%		clockDepart();
+%		queueInsert(l->waitQueue, _threadEntry);
+%		releaseToken();
+%		waitForRelease(l);
+%	}
+%	clockResume();
+%}
+%\end{lstlisting}
+%\end{subfigure}
+%
+%\begin{subfigure}[Figure B]{}
+%\begin{lstlisting}
+%void mutexUnlock(lock_t* l){
+%	clockPause();
+%	waitToken();
+%	lockRelease(l)
+%	if (!queueEmpty(l->waitQueue)){
+%		wakeupThread(queueRemove(l->waitQueue));
+%	}
+%	commitAndUpdateMem();
+%	releaseToken();
+%	clockResume();
+%}
+%\end{lstlisting}
+%\end{subfigure}
+%
+%\end{figure*}
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "paper.tex"
+%%% End:

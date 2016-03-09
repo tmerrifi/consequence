@@ -1,0 +1,207 @@
+\begin{thebibliography}{10}
+
+\bibitem{adve_data_2010}
+Sarita Adve.
+\newblock Data races are evil with no exceptions.
+\newblock \emph{Communications of the {ACM}}, 53(11):84, 2010.
+
+\bibitem{amittai_aviram_workspace_2011}
+{Amittai Aviram}, {Bryan Ford}, and {Yu Zhang}.
+\newblock Workspace consistency: A programming model for shared memory
+  parallelism.
+\newblock In \emph{Workshop on Determinism and Correctness in Parallel
+  Programming}. 2011.
+
+\bibitem{amittai_aviram_efficient_2010}
+{Amittai Aviram}, {Shu-Chun Weng}, {Sen Hu}, and {Bryan Ford}.
+\newblock Efficient system-enforced deterministic parallelism.
+\newblock In \emph{Proceedings of the 9th USENIX Conference on Operating
+  Systems Design and Implementation}. 2010.
+
+\bibitem{batty_mathematizing_2011}
+Mark Batty, Scott Owens, Susmit Sarkar, Peter Sewell, and Tjark Weber.
+\newblock Mathematizing c++ concurrency.
+\newblock In \emph{Proceedings of the 38th Annual {ACM} {SIGPLAN-SIGACT}
+  Symposium on Principles of Programming Languages}. 2011.
+
+\bibitem{bergan_coredet:_2010}
+Tom Bergan, Owen Anderson, Joseph Devietti, Luis Ceze, and Dan Grossman.
+\newblock {CoreDet:} a compiler and runtime system for deterministic
+  multithreaded execution.
+\newblock In \emph{Proceedings of the 15th International Conference on
+  Architectural Support for Programming Languages and Operating Systems
+  ({ASPLOS} '10)}. 2010.
+
+\bibitem{bergan_input-covering_2013}
+Tom Bergan, Luis Ceze, and Dan Grossman.
+\newblock Input-covering schedules for multithreaded programs.
+\newblock In \emph{Proceedings of the 2013 {ACM} {SIGPLAN} International
+  Conference on Object Oriented Programming Systems Languages \&\#38;
+  Applications}. 2013.
+
+\bibitem{berger_grace:_2009}
+Emery~D. Berger, Ting Yang, Tongping Liu, and Gene Novark.
+\newblock Grace: safe multithreaded programming for {C/C++}.
+\newblock In \emph{Proceeding of the 24th {ACM} {SIGPLAN} conference on Object
+  oriented programming systems languages and applications - {OOPSLA} '09}.
+  2009.
+
+\bibitem{bocchino_type_2009}
+Robert Bocchino, Mohsen Vakilian, Vikram Adve, Danny Dig, Sarita Adve, Stephen
+  Heumann, Rakesh Komuravelli, Jeffrey Overbey, Patrick Simmons, and Hyojin
+  Sung.
+\newblock A type and effect system for deterministic parallel java.
+\newblock In \emph{Proceeding of the 24th {ACM} {SIGPLAN} conference on Object
+  oriented programming systems languages and applications - {OOPSLA} '09}.
+  2009.
+
+\bibitem{burckhardt_checkfence:_2007}
+Sebastian Burckhardt, Rajeev Alur, and Milo M.~K. Martin.
+\newblock {CheckFence:} checking consistency of concurrent data types on
+  relaxed memory models.
+\newblock In \emph{Proceedings of the 2007 {ACM} {SIGPLAN} conference on
+  Programming language design and implementation}. 2007.
+
+\bibitem{cui_parrot:_2013}
+Heming Cui, Jiri Simsa, Yi-Hong Lin, Hao Li, Ben Blum, Xinan Xu, Junfeng Yang,
+  Garth~A. Gibson, and Randal~E. Bryant.
+\newblock Parrot: A practical runtime for deterministic, stable, and reliable
+  threads.
+\newblock In \emph{Proceedings of the Twenty-Fourth {ACM} Symposium on
+  Operating Systems Principles}. 2013.
+
+\bibitem{derek_r._hower_hobbes:_2011}
+{Derek R. Hower} and {Mark D. Hill}.
+\newblock Hobbes: {CVS} for shared memory.
+\newblock In \emph{Workshop on Determinism and Correctness in Parallel
+  Programming}. 2011.
+
+\bibitem{derek_r._hower_calvin:_2011}
+{Derek R. Hower}, {Polina Dudnik}, {David A. Wood}, and {Mark D. Hill}.
+\newblock Calvin: Deterministic or not? free will to choose.
+\newblock In \emph{Proceedings of the 17th International Symposium on
+  High-Performance Computer Architecture ({HPCA)}}. 2011.
+
+\bibitem{devietti_dmp:_2009}
+Joseph Devietti, Brandon Lucia, Luis Ceze, and Mark Oskin.
+\newblock {DMP:} deterministic shared memory multiprocessing.
+\newblock In \emph{Proceedings of the 14th international conference on
+  Architectural support for programming languages and operating systems
+  ({ASPLOS} '09)}. 2009.
+
+\bibitem{devietti_rcdc:_2011}
+Joseph Devietti, Jacob Nelson, Tom Bergan, Luis Ceze, and Dan Grossman.
+\newblock {RCDC:} a relaxed consistency deterministic computer.
+\newblock In \emph{Proceedings of the sixteenth international conference on
+  Architectural support for programming languages and operating systems}. 2011.
+
+\bibitem{guy_blelloch_nesl:_1992}
+{Guy Blelloch}.
+\newblock {NESL:} a nested data-parallel language.
+\newblock Technical Report CMU-CS-92-103, Carnegie Mellon University,
+  Pittsburgh, {PA}, 1992.
+
+\bibitem{heming_cui_stable_2010}
+{Heming Cui}, {Jingyue Wu}, {Chia-Che Tsai}, and {Junfeng Yang}.
+\newblock Stable deterministic multithreading through schedule memoization.
+\newblock In \emph{Proceedings of the 9th USENIX Conference on Operating
+  Systems Design and Implementation}. 2010.
+
+\bibitem{heming_cui_efficient_2011}
+{Heming Cui}, {Jingyue Wu}, {John Gallagher}, {Huayang Guo}, and {Junfeng
+  Yang}.
+\newblock Efficient deterministic multithreading through schedule relaxation.
+\newblock In \emph{Proceedings of the Twenty-Third {ACM} Symposium on Operating
+  Systems Principles}. 2011.
+
+\bibitem{jooybar_gpudet:_2013}
+Hadi Jooybar, Wilson~{W.L.} Fung, Mike {O'Connor}, Joseph Devietti, and Tor~M.
+  Aamodt.
+\newblock {GPUDet:} a deterministic {GPU} architecture.
+\newblock In \emph{Proceedings of the eighteenth international conference on
+  Architectural support for programming languages and operating systems}. 2013.
+
+\bibitem{kai_lu_efficient_2014}
+{Kai Lu}, {Xu Zhou}, {Tom Bergan}, and {Xiaoping Wang}.
+\newblock Efficient deterministic multithreading without global barriers.
+\newblock In \emph{Proceedings of the 19th ACM SIGPLAN Symposium on Principles
+  and Practice of Parallel Programming}. 2014.
+
+\bibitem{keleher_treadmarks:_1994}
+Pete Keleher, Alan~L. Cox, Sandhya Dwarkadas, and Willy Zwaenepoel.
+\newblock {TreadMarks:} distributed shared memory on standard workstations and
+  operating systems.
+\newblock In \emph{Proceedings of the {USENIX} Winter 1994 Technical Conference
+  on {USENIX} Winter 1994 Technical Conference}. 1994.
+
+\bibitem{liu_dthreads:_2011}
+Tongping Liu, Charlie Curtsinger, and Emery~D. Berger.
+\newblock Dthreads: efficient deterministic multithreading.
+\newblock In \emph{Proceedings of the Twenty-Third {ACM} Symposium on Operating
+  Systems Principles}. 2011.
+
+\bibitem{Lu:2011:DISC}
+Li~Lu and Michael~L. Scott.
+\newblock Toward a formal semantic framework for deterministic parallel
+  programming.
+\newblock In \emph{Proceedings of the 25th International Conference on
+  Distributed Computing}. 2011.
+
+\bibitem{merrifield_conversion:_2013}
+Timothy Merrifield and Jakob Eriksson.
+\newblock Conversion: multi-version concurrency control for main memory
+  segments.
+\newblock In \emph{Proceedings of the 8th {ACM} European Conference on Computer
+  Systems}. 2013.
+
+\bibitem{nguyen_deterministic_2014}
+Donald Nguyen, Andrew Lenharth, and Keshav Pingali.
+\newblock Deterministic galois: On-demand, portable and parameterless.
+\newblock In \emph{Proceedings of the 19th International Conference on
+  Architectural Support for Programming Languages and Operating Systems}. 2014.
+
+\bibitem{olszewski_kendo:_2009}
+Marek Olszewski, Jason Ansel, and Saman Amarasinghe.
+\newblock Kendo: Efficient deterministic multithreading in software.
+\newblock In \emph{Proceeding of the 14th international conference on
+  Architectural support for programming languages and operating systems -
+  {ASPLOS} '09}. 2009.
+
+\bibitem{rinard_design_1998}
+Martin~C. Rinard and Monica~S. Lam.
+\newblock The design, implementation, and evaluation of jade.
+\newblock \emph{{ACM} Transactions on Programming Languages and Systems},
+  20(3):483–545, 1998.
+
+\bibitem{Segulja:2014:pact:cost-weak-det}
+Cedomir Segulja and Tarek~S. Abdelrahman.
+\newblock What is the cost of weak determinism?
+\newblock In \emph{Proceedings of the 23rd International Conference on Parallel
+  Architectures and Compilation}. 2014.
+
+\bibitem{shun_brief_2012}
+Julian Shun, Guy~E. Blelloch, Jeremy~T. Fineman, Phillip~B. Gibbons, Aapo
+  Kyrola, Harsha~Vardhan Simhadri, and Kanat Tangwongsan.
+\newblock Brief announcement: The problem based benchmark suite.
+\newblock In \emph{Proceedings of the Twenty-fourth Annual {ACM} Symposium on
+  Parallelism in Algorithms and Architectures}. 2012.
+
+\bibitem{tom_bergan_deterministic_2010}
+{Tom Bergan}, {Nicholas Hunt}, {Luis Ceze}, and {Steven Gribble}.
+\newblock Deterministic process groups in {dOS}.
+\newblock In \emph{Proceedings of the 9th USENIX Conference on Operating
+  Systems Design and Implementation}. 2010.
+
+\bibitem{4636099}
+V.M. Weaver and S.A. McKee.
+\newblock Can hardware performance counters be trusted?
+\newblock In \emph{Workload Characterization, 2008. IISWC 2008. IEEE
+  International Symposium on}. 2008.
+
+\bibitem{william_thies_streamit:_2002}
+{William Thies}, {Michal Karczmarek}, and {Saman P. Amarasinghe}.
+\newblock {StreamIt:} a language for streaming applications.
+\newblock In \emph{Proceedings of the 11th International Conference on Compiler
+  Construction}. 2002.
+
+\end{thebibliography}

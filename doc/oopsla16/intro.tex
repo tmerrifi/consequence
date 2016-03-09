@@ -1,0 +1,9 @@
+\section{Introduction}
+
+%Introduce DMT what it provides and why it is important
+
+Deterministic Multithreading (DMT) systems offer the promise of significantly reduced complexity for programmers targeting multiprocessor systems. With shared memory communication and synchronization "set in stone" for a given input, the programmer is better positioned to debug and reason about a multithreaded program's execution. 
+
+This reduction in complexity however comes at a price, particularly for programs that perform synchronization frequently. In both strong and weak DMT systems, all synchronization operations are totally ordered based on some deterministic schedule. For example, in DMT systems that use a deterministic logical clock based on instruction counting, a thread will not be eligible to acquire a lock until it has the global minimum instruction count (GMIC). In a program that uses fine-grained locking, this potentially forces communication and waiting at every lock acquisition (at a minimum)  and undermines the best efforts of the programmer at building scalable software. In short, forcing a deterministic total order - even when the synchronization operations are disjoint - leads to unacceptable performance when compared to non-deterministic execution.
+
+DMT systems can potentially relax the total order of synchronization operations, however this is made difficult by the fact that the schedule is enforced at runtime. Returning to the fine-grained locking example; we don't know what locks a program may acquire during execution so its difficult to know when its safe to relax the schedule without hindering determinism.  
