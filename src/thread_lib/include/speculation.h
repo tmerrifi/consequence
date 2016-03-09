@@ -296,10 +296,6 @@ class speculation{
             //cout << endl;
             return_val=true;
         }
-        /*        else if (!isSpeculating() && !__shouldAttempt( global_success_rate )){
-            terminated_spec_reason = SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_GLOBAL;
-            return_val=false;
-            }*/
         else if (getSyncEntry(entry_ptr)==NULL){
             terminated_spec_reason = SPEC_TERMINATE_REASON_UNINITIALIZED;
             return_val=false;
@@ -308,6 +304,11 @@ class speculation{
         //else if (entry->getStats(tid)->specPercentageOfSuccess() < SPEC_SYNC_MIN_THRESHOLD ){
         else if (!__shouldAttempt( entry->getStats(tid)->specPercentageOfSuccess() )){
             terminated_spec_reason = SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK;
+            entry_ended_spec=entry;
+            return_val=false;
+        }
+        else if (entries_count>=SPECULATION_ENTRIES_MAX){
+            terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_OBJECT_COUNT;
             entry_ended_spec=entry;
             return_val=false;
         }
