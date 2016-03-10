@@ -52,7 +52,7 @@ extern runtime_data_t *global_data;
 #define PERSIST_COMMIT_MERGE_ONLY 2
 #define PERSIST_COMMIT_UPDATE_ONLY 3
 
-#define PROTECTEDHEAP_SIZE (1048576UL * 20000)
+#define PROTECTEDHEAP_SIZE (1048576UL * 15000)
 
 #define MAX_THREADS 64
 
@@ -62,7 +62,7 @@ public:
   enum { PROTECTEDHEAP_CHUNK = 10485760 };
   
   enum { MAX_GLOBALS_SIZE = 1048576UL * 2000 };
-  enum { INTERNALHEAP_SIZE = 1048576UL * 20000 }; // FIXME 10M 
+  enum { INTERNALHEAP_SIZE = 1048576UL * 8000 }; // FIXME 10M 
   enum { PageSize = 4096UL };
   enum { PAGE_SIZE_MASK = (PageSize-1) };
   enum { NUM_HEAPS = 128 };
