@@ -86,8 +86,6 @@
        char clock_file_name[200];
        u_int64_t current_event_count;
        struct task_clock_user_status user_status[DETERM_CLOCK_MAX_THREADS];
-       u_int64_t event_debugging[100000]; //up to these many events
-       u_int64_t event_tick_debugging[100000];
    };
 
 

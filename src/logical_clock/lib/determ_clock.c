@@ -122,8 +122,6 @@ __attribute__((constructor)) static void determ_clock_init(){
     clock_info = __create_shared_mem(file_name);
     //copy the filename that was created in __create_shared_mem
     strcpy(clock_info->clock_file_name, file_name);
-    memset(clock_info->event_debugging, 0, DETERM_EVENT_DEBUGGING_SIZE * sizeof(u_int64_t));
-    memset(clock_info->event_tick_debugging, 0, DETERM_EVENT_DEBUGGING_SIZE * sizeof(u_int64_t));
     //initialize the first clock now
     determ_task_clock_init();
     clock_info->leader_perf_counter=&task_clock_info.perf_counter;
