@@ -792,7 +792,6 @@ public:
     }
 
     static void __mutex_lock_inner(pthread_mutex_t * mutex, bool allow_coarsening) {
-        //unsigned long long cycle_begin=__rdtsc();
         struct local_copy_stats cs;
         int wasSpeculating=0;
         bool finishCommit=false;
@@ -811,6 +810,7 @@ public:
         isSingleActiveThread= !isSpeculating && singleActiveThread();
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
+        //unsigned long long cycle_begin=__rdtsc();
         if (!isUsingTxCoarsening && (failure_count==0) &&
             !(isSpeculating==false && _lock_count>1) &&
             _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult)){
@@ -825,7 +825,7 @@ public:
                 if (!isSpeculating){
                     //HERE we know that we are beginning a speculation
                     spec_dirty_count=0;
-                    determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_TX_START, NULL);  
+                    //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_TX_START, NULL);  
                     xmemory::begin_speculation();
                     //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
                 }
@@ -841,9 +841,10 @@ public:
                 //#else
                 //                determ_task_clock_add_ticks_lazy(LOGICAL_CLOCK_TIME_LOCK+dirty_pages_ticks);
                 //#endif
-                /*if (_thread_index==2 && cycle_begin%10==0){
-                    cout << "lock cycles: " << __rdtsc() - cycle_begin << endl;
-                    }*/
+                
+                //if (_thread_index==1 && cycle_begin%10==0){
+                //  cout << "lcycles: " << __rdtsc() - cycle_begin << endl;
+                //}
                 return;
             }
             else{
@@ -952,12 +953,11 @@ public:
 
     static void mutex_lock(pthread_mutex_t * mutex) {
         timespec t1,t2;
-        unsigned long long start;
-        //start=__rdtsc();
         characterize_lock_count++;
         bool isSpeculating = _speculation->isSpeculating();
         stopClock();
 
+        
         //**************DEBUG CODE**************
 #ifdef EVENT_VIEWER
         if (isSpeculating){
@@ -972,7 +972,12 @@ public:
 #ifdef USE_TAGGING
         xmemory::set_local_version_tag((unsigned int)mutex);
 #endif
+        unsigned long long start=__rdtsc();
         __mutex_lock_inner(mutex, true /*allow coarseing?*/);
+        //if (_thread_index==1 && start % 20 == 0){
+        //  cout << "l: " << xmemory::get_dirty_pages() << " " << __rdtsc() - start << " " << determ_debug_notifying_diff_read() << endl;
+        //}
+        
 #ifdef DTHREADS_TASKCLOCK_DEBUG
         cout << "mutex lock " << _thread_index << " " << determ_task_clock_read() << " pid " << getpid() << " " << mutex << endl;
 #endif
@@ -997,6 +1002,7 @@ public:
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, mutex);
 #endif
+
         //*************END DEBUG CODE*********************
 
         /*        if (_thread_index==1 && start % 50 == 0){
@@ -1007,7 +1013,7 @@ public:
 
   static void mutex_unlock(pthread_mutex_t * mutex) {
       unsigned long long start;
-      //start=__rdtsc();
+      start=__rdtsc();
       stopClock((size_t)mutex);
       //**************DEBUG CODE**************
 #ifdef EVENT_VIEWER
@@ -1027,6 +1033,7 @@ public:
       cout << "UNLOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read()
              << " tid " << _thread_index << " lockcount " << _lock_count << " m: " << mutex << endl;
 #endif
+
       if (isSpeculating){
           //_speculation->updateTicks();
           //we want to notify the speculation engine that we have released this lock
@@ -1042,6 +1049,10 @@ public:
           //  cout << "unlock: " << __rdtsc() - start << endl;
           //}
 
+          //if (_thread_index==1){
+          //  cout << "ul: " << xmemory::get_dirty_pages() << " " << __rdtsc() - start << " " << determ_debug_notifying_diff_read() << endl;
+          //}
+          
           return;
       }
 

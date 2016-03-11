@@ -100,10 +100,10 @@
 #define EWMA_ALPHA .1F
 
 //only try if we believe this is going to work this percentage of the time
-#define SPEC_ATTEMPT_THRESHOLD .9F
+#define SPEC_ATTEMPT_THRESHOLD .85
 
-//if we don't meet the threshold, try again 1/10 times
-#define SPEC_ATTEMPT_AGAIN .05F
+//if we don't meet the threshold, try again 20 times
+#define SPEC_ATTEMPT_AGAIN 20
 
 
 class speculation{
@@ -187,17 +187,12 @@ class speculation{
             if (__last_committed_is_larger(entry, logical_clock_start, tid) || lockHeld){
                 //this entry caused us to fail...update its stats
                 failure_count++;
-                /*cout << " endspec failed entry " << getpid() << " " << entry->id << " " << entry->getStats(tid)->specPercentageOfSuccess() << " "
-                   << " failed " << entry->getStats(tid)->getFailedCount() << " succeeded " << entry->getStats(tid)->getSucceededCount() << " " << entry->getStats(tid) << " " <<
-                   determ_task_clock_force_read()<<  endl;*/
                 update_global_success_rate(false);
-                entry->getStats(tid)->specFailed();
+                specStatsFailed(entry, tid);
                 return false;
             }
             else{
-                //cout << "verified tid: " << tid << " " << entry << " " << entry->last_committed << " " << logical_clock_start << endl;
                 update_global_success_rate(true);
-                entry->getStats(tid)->specSucceeded();
             }
         }
         return true;
@@ -262,29 +257,33 @@ class speculation{
         }
 #endif
     }
-        
+
+
+    
+    
     //using the multiplication method to do a probabilistic speculation
     bool __shouldAttempt(double percentageOfSuccess){
-        bool attempt;
-        if (percentageOfSuccess >= SPEC_ATTEMPT_THRESHOLD){
-            attempt=true;
-        }
-        else{
-            const double A=0.432;
-            double val = floor(100 * ( ((double)seq_num*A) - floor((double)seq_num*A)));
-            //cout << "taking a risk " << getpid() << " " << (val < SPEC_ATTEMPT_AGAIN) << endl;
-            attempt=(val < SPEC_ATTEMPT_AGAIN);
-        }
-        return attempt;
+        return (percentageOfSuccess >= SPEC_ATTEMPT_THRESHOLD ||
+                seq_num % SPEC_ATTEMPT_AGAIN == 0);       
     }
 
 #ifdef USE_SPECULATION
+
+
+    static unsigned long long __rdtsc(void)
+    {
+        unsigned long low, high;
+        asm volatile("rdtsc" : "=a" (low), "=d" (high));
+        return ((low) | (high) << 32);
+    }
+
     
     bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
         bool return_val;
+        //unsigned long long startcycles = __rdtsc();
         updateTicks();
         SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
-
+        
         if (active_speculative_entries > 0){
             if (getSyncEntry(entry_ptr)==NULL){
                 cout << "nested speculation with uninitialized sync object...not currently supported" << endl;
@@ -296,13 +295,14 @@ class speculation{
             //cout << endl;
             return_val=true;
         }
-        else if (getSyncEntry(entry_ptr)==NULL){
+        else if (entry==NULL){
             terminated_spec_reason = SPEC_TERMINATE_REASON_UNINITIALIZED;
             return_val=false;
         }
         //if we're about to speculate on a lock that is likely to cause a conflict, lets not to it
         //else if (entry->getStats(tid)->specPercentageOfSuccess() < SPEC_SYNC_MIN_THRESHOLD ){
-        else if (!__shouldAttempt( entry->getStats(tid)->specPercentageOfSuccess() )){
+        //if (!__shouldAttempt( entry->getStats(tid)->specPercentageOfSuccess() )){
+        else if (!__shouldAttempt( specStatsSuccessRate(entry,tid) )){
             terminated_spec_reason = SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK;
             entry_ended_spec=entry;
             return_val=false;
@@ -469,7 +469,8 @@ class speculation{
 
              if (firstCommitOfEntry){
                  //update the stats
-                 entry->getStats(tid)->specSucceeded();
+                 specStatsSuccess(entry, tid);
+                 //entry->getStats(tid)->specSucceeded();
              }
              
              entry->last_committed=logical_clock;

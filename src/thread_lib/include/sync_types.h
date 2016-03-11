@@ -5,16 +5,16 @@
 #include "list.h"
 #include "syncstats.h"
 
+struct speculationSyncStats{
+    unsigned long results[MAX_THREADS];
+};
+
 class SyncVarEntry{
 public:
    int id;
    uint64_t last_committed;
    uint16_t committed_by;
-   syncStats * stats;
-
-   syncStats * getStats(int tid){
-      return &stats[tid%MAX_THREADS];
-   }
+   struct speculationSyncStats stats;   
 };
 
 class LockEntry :public SyncVarEntry {
@@ -57,14 +57,12 @@ class BarrierEntry : public SyncVarEntry {
 };
 
 inline void * allocSyncEntry(int size, int counter) {
-      SyncVarEntry * syncEntry = (SyncVarEntry *)InternalHeap::getInstance().malloc(size);
-      syncEntry->last_committed=0;
-      syncEntry->stats = (syncStats *) InternalHeap::getInstance().malloc(sizeof(syncStats)*MAX_THREADS);
-      for (int i=0;i<MAX_THREADS;i++){
-          syncEntry->stats[i].initSyncStats();
-      }
-      //syncEntry->stats = new (statsMem) syncStats();
-      syncEntry->id=counter;
+    SyncVarEntry * syncEntry = (SyncVarEntry *)InternalHeap::getInstance().malloc(size);
+    syncEntry->last_committed=0;
+    //start off perfect
+    memset(&syncEntry->stats, 0xFF, sizeof(struct speculationSyncStats));
+    //syncEntry->stats = new (statsMem) syncStats();
+    syncEntry->id=counter;
     return syncEntry;
   }
 
@@ -84,12 +82,23 @@ inline void * allocSyncEntry(int size, int counter) {
 
   inline void clearSyncEntry(void * origentry) {
     void **dest = (void**)origentry;
-
     *dest = NULL;
-
     // Update the shared copy in the same time. 
     xmemory::mem_write(*dest, NULL);
   }
+
+inline void specStatsSuccess(SyncVarEntry * syncEntry, int tid){
+    syncEntry->stats.results[tid]=(syncEntry->stats.results[tid]<<1)|1;
+}
+
+inline void specStatsFailed(SyncVarEntry * syncEntry, int tid){
+    syncEntry->stats.results[tid]=(syncEntry->stats.results[tid]<<1);
+}
+
+inline double specStatsSuccessRate(SyncVarEntry * syncEntry, int tid){
+    double result = ((double)__builtin_popcountl(syncEntry->stats.results[tid]))/64.0 ;
+    return result;
+}
 
 
 
