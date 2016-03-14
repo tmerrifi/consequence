@@ -451,8 +451,8 @@ public:
 
     // Return immediately if the thread argument is NULL.
     if (v == NULL) {
-      fprintf(stderr, "%d: join with invalid parameter\n", getpid());
-      return;
+        cout << "join with invalid parameter" << endl;
+        return;
     }
 
     // Wait on token if the fence is already started.
