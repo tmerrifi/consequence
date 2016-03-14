@@ -30,7 +30,7 @@
 #else
 //!TOKEN_ORDER_ROUND_ROBIN
 #ifndef SPECULATION_ENTRIES_MAX
-#define SPECULATION_ENTRIES_MAX 100
+#define SPECULATION_ENTRIES_MAX 512
 #endif
 
 #ifndef SPECULATION_START_TICKS
@@ -307,7 +307,7 @@ class speculation{
             entry_ended_spec=entry;
             return_val=false;
         }
-        else if (entries_count>=SPECULATION_ENTRIES_MAX){
+        else if (entries_count>=(SPECULATION_ENTRIES_MAX/2)){
             terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_OBJECT_COUNT;
             entry_ended_spec=entry;
             return_val=false;
