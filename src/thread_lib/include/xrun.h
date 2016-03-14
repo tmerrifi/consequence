@@ -1164,6 +1164,8 @@ public:
   static int cond_wait(void * cond, void * lock) {
       stopClockForceEnd();
       bool acquiringToken=(!_token_holding);
+      bool wasSpeculating;
+      
       //**************DEBUG CODE**************
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_COND_WAIT, cond);
@@ -1177,11 +1179,18 @@ public:
       }
       //from the perspective of the speculation engine, we need to remove this lock from the
       //set of active locks. If we don't, it will prevent us from successfully committing our tx
-      if (_speculation->isSpeculating()){
+      wasSpeculating=_speculation->isSpeculating();
+      if (wasSpeculating){
           _speculation->endSpeculativeEntry(lock);
       }
-          
       commitAndUpdateMemoryTerminateSpeculation();
+      //in the event that we were speculating, the update to the condition guarding the cond_wait may have been
+      //delayed. Its possible that the signaling thread has done the signal and is currently blocked, leading
+      //to deadlock. So now that we've updated our view of memory, we need to create a "spurious" wakeup to make the
+      //user code check again.
+      if (wasSpeculating){
+          goto wokeup;
+      }
       
       //TODO: We need a better solution for this...this is embarassing :)
       if (sleep_count<MAX_SLEEP_COUNT){
@@ -1189,6 +1198,7 @@ public:
           is_sleeping=true;
           sleep_count++;
       }
+      
       //we will release the token in here, make sure to end a coarsened transaction
       endTXCoarsening();
 #ifdef PRINT_SCHEDULE
@@ -1201,6 +1211,8 @@ public:
           is_sleeping=false;
       }
 
+  wokeup:
+      
       //**************DEBUG CODE**************
       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_COND_WOKE_UP, cond);
       //*************END DEBUG CODE*********************
