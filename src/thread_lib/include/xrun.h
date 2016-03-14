@@ -153,7 +153,7 @@ public:
         monitor_address=0xDEAD;
     }
     
-    installSignalHandler();
+    //installSignalHandler();
 
     pid_t pid = syscall(SYS_getpid);
 
