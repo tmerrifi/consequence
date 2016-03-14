@@ -1497,7 +1497,10 @@ public:
   
 #endif
 
-  void barrier_destroy(void * bar) {assert(false);}
+  void barrier_destroy(void * bar) {
+      //assert(false);
+
+  }
 
   int get_syncvar_id(void * var){
       SyncVarEntry * syncVar = (SyncVarEntry *)getSyncEntry(var);
