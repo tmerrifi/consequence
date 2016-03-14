@@ -32,7 +32,9 @@
 #define __get_clock_ticks(group_info, tid) (group_info->clocks[tid].ticks + group_info->clocks[tid].base_ticks)
 
 #define __set_ticks_in_userspace(group_info, tid)   \
-    current->task_clock.user_status->ticks=__get_clock_ticks(group_info,tid);
+    group_info->user_status_arr[tid].ticks=__get_clock_ticks(group_info,tid);
+//current->task_clock.user_status->ticks=__get_clock_ticks(group_info,tid);
+
 
 #define __set_base_ticks(group_info, tid, val) (group_info->clocks[tid].base_ticks=val)
 
