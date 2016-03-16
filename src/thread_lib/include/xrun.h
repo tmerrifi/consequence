@@ -1200,9 +1200,9 @@ public:
       //delayed. Its possible that the signaling thread has done the signal and is currently blocked, leading
       //to deadlock. So now that we've updated our view of memory, we need to create a "spurious" wakeup to make the
       //user code check again.
-      if (wasSpeculating){
-          goto wokeup;
-      }
+      //if (wasSpeculating){
+      //  goto wokeup;
+      //}
       
       //TODO: We need a better solution for this...this is embarassing :)
       if (sleep_count<MAX_SLEEP_COUNT){
