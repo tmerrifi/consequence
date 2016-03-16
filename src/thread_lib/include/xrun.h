@@ -1148,15 +1148,24 @@ public:
 #ifdef USE_TAGGING
       xmemory::set_local_version_tag((unsigned int)barrier);
 #endif
-      //we acquire the token as a group...the only way this code will fire is if a tx is coarsened
+
+      
+      /*//we acquire the token as a group...the only way this code will fire is if a tx is coarsened
       //and leads into a barrier
-      putToken();
+      putToken();*/
+      //lets get the token...
+      waitToken();
+      if (_speculation->isSpeculating()){
+          terminateSpeculation();
+      }
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       determ::getInstance().barrier_wait(barrier, _thread_index);
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
 #ifdef USE_TAGGING
       xmemory::set_local_version_tag(0);
 #endif
+      
+      _token_holding=false;
       startClock();
       return 0;
   }
@@ -1389,15 +1398,20 @@ public:
       commitAndUpdateMemory(NULL);
   }
 
+
+  static void terminateSpeculation(){
+      determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK, NULL);
+      if (_speculation->validate()){
+          determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
+          determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, (void *)_speculation->getTerminateReasonType());
+          locks_elided+=_speculation->getEntriesCount();
+          _speculation->commitSpeculation(get_ticks_for_speculation());
+          xmemory::end_speculation();
+      }
+  }
+  
     static void commitAndUpdateMemoryTerminateSpeculation(){
-        determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK, NULL);
-        if (_speculation->validate()){
-            determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
-            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, (void *)_speculation->getTerminateReasonType());
-            locks_elided+=_speculation->getEntriesCount();
-            _speculation->commitSpeculation(get_ticks_for_speculation());
-            xmemory::end_speculation();
-        }
+        terminateSpeculation();
         commitAndUpdateMemory();
     }
 
