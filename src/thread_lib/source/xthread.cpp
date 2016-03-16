@@ -130,7 +130,7 @@ void xthread::do_work(int parent_index, ThreadPoolEntry * tpe){
             //and will just keep spinning forever
             determ_task_clock_on_wakeup();
         }
-        xrun::childRegister(mypid, parent_index, tpe->id);
+        xrun::childRegister(mypid, parent_index, tpe->id, tpe->status==THREAD_POOL_ENTRY_INIT);
         _nestingLevel++;
         run_thread(tpe->run_function, t, tpe->run_function_arg);
         _nestingLevel--;

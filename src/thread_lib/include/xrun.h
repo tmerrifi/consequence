@@ -301,7 +301,7 @@ public:
     
   // New created thread should call this.
   // Now only the current thread is active.
-    static inline int childRegister(int pid, int parentindex, int child_index) {
+    static inline int childRegister(int pid, int parentindex, int child_index, bool newThread) {
     int threads;
     struct timespec t1,t2;
 
@@ -317,7 +317,10 @@ public:
     locks_elided=0;
     
     void* buf = mmap(NULL, sizeof(_speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    _speculation = new (_speculation) speculation(_thread_index);
+    //only do this if we've forked a new thread. 
+    if (newThread){
+        _speculation = new (_speculation) speculation(_thread_index);
+    }
     
     debug_mem = new (debug_mem) debug_user_memory(_thread_index);
     
