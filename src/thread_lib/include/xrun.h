@@ -1255,9 +1255,9 @@ public:
       if(!(wasSpeculating==false && _lock_count>0) &&
          _speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult)){
 #ifdef NO_DETERM_SYNC
-          if (_speculation->speculate(cond,get_ticks_for_speculation(), speculation::SPEC_ENTRY_SIGNAL)==true){
+          if (_speculation->speculate(cond,get_ticks_for_speculation(), speculation::SPEC_ENTRY_BROADCAST)==true){
 #else
-              if (_speculation->speculate(cond,_last_token_release_time, speculation::SPEC_ENTRY_SIGNAL)==true){
+              if (_speculation->speculate(cond,_last_token_release_time, speculation::SPEC_ENTRY_BROADCAST)==true){
 #endif
                   if (!wasSpeculating){
                       //HERE we know that we are beginning a speculation
