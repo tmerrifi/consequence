@@ -1369,9 +1369,7 @@ public:
 
 
     static void beginSysCallDeactivate(){
-        cout << "deactivating 1... " << " " << _initialized << " " << alive << " " << determ_task_clock_read() << endl;
       if (_initialized && alive){
-          cout << "deactivating 2... " << determ_task_clock_read() << endl;
           stopClockForceEnd();
           bool acquiringToken=(!_token_holding);
           if (acquiringToken){
@@ -1381,7 +1379,6 @@ public:
           endTXCoarsening();
           determ_task_clock_halt();
           putToken();
-          cout << "deactivating 3... " << determ_task_clock_read() << endl;
       }
   }
 
