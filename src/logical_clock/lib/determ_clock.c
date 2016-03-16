@@ -62,6 +62,8 @@ struct determ_task_clock_info task_clock_info;
 
 #define MAX_SPIN_INT 1000
 
+#define POLL_TIMEOUT_MS 5
+
 struct determ_task_clock_info determ_task_clock_get_info(){
     return task_clock_info;
 }
@@ -286,7 +288,8 @@ int determ_task_clock_is_lowest_wait(){
             memset(&fds, 0, sizeof(struct pollfd));
             fds.fd = task_clock_info.perf_counter.fd;
             fds.events = POLLIN;
-            poll(&fds, 1, -1);
+            //lets poll for just a few milliseconds
+            poll(&fds, 1, POLL_TIMEOUT_MS);
         }
     }
     __woke_up();
