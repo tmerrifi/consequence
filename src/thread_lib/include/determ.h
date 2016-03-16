@@ -1434,6 +1434,7 @@ public:
       }
   }
 
+  //called with the token held
   void barrier_wait(void * b, int _thread_index){
       BarrierEntry * barr = (BarrierEntry *)getSyncEntry(b);
       //which version do we need to wait for????
@@ -1441,7 +1442,7 @@ public:
       //our version numbers for heap and globals
       unsigned long ourHeapVersion, ourGlobalsVersion;
       //get the token
-      getToken(_thread_index);
+      //getToken(_thread_index);
       fflush(stdout);
       //increment the counter to mark our arrival
       barr->counter++;
