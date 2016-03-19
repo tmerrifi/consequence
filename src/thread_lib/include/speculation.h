@@ -30,7 +30,7 @@
 #else
 //!TOKEN_ORDER_ROUND_ROBIN
 #ifndef SPECULATION_ENTRIES_MAX
-#define SPECULATION_ENTRIES_MAX 512
+#define SPECULATION_ENTRIES_MAX 1024
 #endif
 
 #ifndef SPECULATION_START_TICKS
@@ -129,6 +129,7 @@ class speculation{
     
     
     uint32_t entries_count;
+    uint32_t locks_count;
     uint32_t active_speculative_entries;
     uint64_t logical_clock_start;
     checkpoint _checkpoint;
@@ -206,6 +207,7 @@ class speculation{
         }
         tid=_tid;
         entries_count=0;
+        locks_count=0;
         active_speculative_entries=0;
         logical_clock_start=0;
         max_entries=SPECULATION_ENTRIES_MAX;
@@ -386,6 +388,7 @@ class speculation{
         }
         else if (type == SPEC_ENTRY_LOCK) {
             active_speculative_entries++;
+            locks_count++;
         }
         
         entries[entries_count].entry=entry;
@@ -435,6 +438,7 @@ class speculation{
             entries_count=0;
             ticks=0;
             start_ticks=0;
+            locks_count=0;
             active_speculative_entries=0;
             buffered_signal=false;
             signal_delay_ticks=0;
@@ -478,6 +482,7 @@ class speculation{
          }
 
          entries_count=0;
+         locks_count=0;
          buffered_signal=false;
          signal_delay_ticks=0;
          _checkpoint.is_speculating=false;
@@ -502,6 +507,11 @@ class speculation{
          return entries_count;
      }
 
+     int getLockCount(){
+         return locks_count;
+     }
+
+     
      uint64_t getCurrentTicks(){
          return ticks;
      }

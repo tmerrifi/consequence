@@ -879,10 +879,9 @@ public:
 
         //in the event that we were speculating lets do an update, release the token and try to speculate again
         if (wasSpeculating=endSpeculation()){
-            int locks_elided_tmp=_speculation->getEntriesCount();
-            locks_elided+=locks_elided_tmp;
+            locks_elided+=_speculation->getLockCount();
             //DEBUG_TYPE_SPECULATIVE_COMMIT
-            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_COMMIT, (void *)locks_elided_tmp);
+            determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_COMMIT, NULL);
             determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_TX_ENDING, NULL);  
             _speculation->commitSpeculation(get_ticks_for_speculation());
             xmemory::end_speculation();
@@ -908,11 +907,11 @@ public:
             if (failure_count==1){
                 commitAndUpdateMemory(&cs);
             }
-            if (wasSpeculating){
+            /*if (wasSpeculating){
                 locks_elided+=_speculation->getEntriesCount();
                 //we need to actually commit our speculation
                 _speculation->commitSpeculation(get_ticks_for_speculation());
-            }
+                }*/
             //reset the coarsening counter
             endTXCoarsening();
             isUsingTxCoarsening=false;
@@ -935,14 +934,16 @@ public:
              << determ_task_clock_read() << " " << determ_debug_notifying_clock_read() << endl;
         fflush(stdout);
 #endif
-        if (wasSpeculating){
+        /*if (wasSpeculating){
             locks_elided+=_speculation->getEntriesCount();
             _speculation->commitSpeculation(get_ticks_for_speculation());
         }
         else{
             _speculation->updateLastCommittedTime(mutex,get_ticks_for_speculation());
-        }
+            }*/
 
+        _speculation->updateLastCommittedTime(mutex,get_ticks_for_speculation());
+        
         //release the token if need be
         if (!isSingleActiveThread && !isUsingTxCoarsening){
             putToken();
