@@ -1349,7 +1349,7 @@ public:
   }
 
   static void beginSysCall(){
-      if (_initialized && alive){
+      if (_initialized && alive && _speculation->isSpeculating()){
           stopClockForceEnd();
           bool acquiringToken=(!_token_holding);
           if (acquiringToken){
