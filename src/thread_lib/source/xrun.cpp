@@ -26,6 +26,9 @@ unsigned long long xrun::wait_cycles;
 speculation * xrun::_speculation;
 int xrun::characterize_lock_count;
 int xrun::characterize_barrier_wait;
+int xrun::spec_signals_count;
+int xrun::signals_count;
+int xrun::characterize_lock_count_spec;
 /*DEBUGGING*/
 size_t xrun::monitor_address;
 /***********/

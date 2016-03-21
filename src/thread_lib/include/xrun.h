@@ -111,8 +111,10 @@ private:
 
     static uint64_t _last_token_release_time;
 
-    static int characterize_lock_count, characterize_barrier_wait;
-
+    //statistics stuff
+    static int characterize_lock_count, characterize_lock_count_spec, characterize_barrier_wait;
+    static int spec_signals_count, signals_count;
+    
     static size_t monitor_address;
 
     static debug_user_memory * debug_mem;
@@ -141,7 +143,10 @@ public:
     heapVersionToWaitFor=0;
     globalsVersionToWaitFor=0;
     characterize_lock_count=0;
+    characterize_lock_count_spec=0;
     characterize_barrier_wait=0;
+    spec_signals_count=0;
+    signals_count=0;
     tx_current_coarsening_level=LOGICAL_CLOCK_MIN_ALLOWABLE_TX_SIZE;
     tx_monitor_next=false;
 
@@ -269,6 +274,11 @@ public:
       determ::getInstance().finalize();
       ThreadPool::getInstance().terminate_all();
       putToken();
+      cout << "specstats: " << characterize_lock_count << "," << characterize_lock_count_spec << "," <<
+          signals_count << "," << spec_signals_count << "," <<
+          characterize_barrier_wait << "," <<
+          token_acq << "," <<_speculation->getReverts() << "," << _speculation->getCommits() << "," <<
+          _speculation->meanRevertCS() << "," << _speculation->meanSpecCS() << endl;
   }
 
   static void finalize(void) {
@@ -362,9 +372,16 @@ public:
       else{
           ThreadPool::getInstance().add_thread_to_pool_by_id(_thread_index);
       }
-      cout << "reverts: " << reverts << " sync ops elided: " <<
-          locks_elided << " total lock count: " << characterize_lock_count << " " <<
-          " tokenacqs: " << token_acq << " " << getpid() << endl;
+
+      cout << "specstats: " << characterize_lock_count << "," << characterize_lock_count_spec << "," <<
+          signals_count << "," << spec_signals_count << "," <<
+          characterize_barrier_wait << "," <<
+          token_acq << "," <<_speculation->getReverts() << "," << _speculation->getCommits() << "," <<
+          _speculation->meanRevertCS() << "," << _speculation->meanSpecCS() << endl;
+
+
+
+      
       xmemory::sleep();
       alive=false;
       //the token is released in here....
@@ -814,7 +831,7 @@ public:
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
         //unsigned long long cycle_begin=__rdtsc();
-        if (!isUsingTxCoarsening && (failure_count==0) &&
+        if (!isSingleActiveThread && !isUsingTxCoarsening && (failure_count==0) &&
             !(isSpeculating==false && _lock_count>1) &&
             _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult)){
             
@@ -848,6 +865,7 @@ public:
                 //if (_thread_index==1 && cycle_begin%10==0){
                 //  cout << "lcycles: " << __rdtsc() - cycle_begin << endl;
                 //}
+                characterize_lock_count_spec++;
                 return;
             }
             else{
@@ -892,6 +910,8 @@ public:
             goto retry;
         }
 
+
+        characterize_lock_count++;
         
         //lets actually get the "real" lock, which is really just setting a flag
         bool getLock=determ::getInstance().lock_acquire(mutex,_thread_index);
@@ -957,7 +977,6 @@ public:
 
     static void mutex_lock(pthread_mutex_t * mutex) {
         timespec t1,t2;
-        characterize_lock_count++;
         bool isSpeculating = _speculation->isSpeculating();
         stopClock();
 
@@ -1153,7 +1172,7 @@ public:
       xmemory::set_local_version_tag((unsigned int)barrier);
 #endif
 
-      
+      characterize_barrier_wait++;
       /*//we acquire the token as a group...the only way this code will fire is if a tx is coarsened
       //and leads into a barrier
       putToken();*/
@@ -1270,6 +1289,7 @@ public:
                   else{
                       startClock();
                   }
+                  spec_signals_count++;
                   return;
               }
               else{
@@ -1280,7 +1300,7 @@ public:
               }
       }
       /*endspeculative path*/
-      
+      signals_count++;
       stopClockForceEnd();
       //if we are in a coarse tx, we're about to signal another thread...so reset it
       resetTXCoarsening();
@@ -1316,10 +1336,12 @@ public:
           if (_speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult)){
               //ready to add our entry
               _speculation->speculate(cond, _last_token_release_time, speculation::SPEC_ENTRY_SIGNAL);
+              spec_signals_count++;
               return;
           }
       }
 
+      signals_count++;
       stopClockForceEnd();
       //if we are in a coarse tx, we're about to signal another thread...so reset it
       resetTXCoarsening();
