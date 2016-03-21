@@ -44,7 +44,7 @@
 
 //we never adapt less than this number
 #ifndef SPECULATION_MIN_TICKS
-#define SPECULATION_MIN_TICKS 10000
+#define SPECULATION_MIN_TICKS 1000
 #endif
 
 
@@ -54,19 +54,10 @@
 #define SPECULATION_ENTRIES_MAX_ALLOCATED (SPECULATION_ENTRIES_MAX+50)
 
 
-#ifdef USE_CYCLES_TICKS
+#define SUCCEEDED_TICK_INC 5000
+#define SUCCEEDED_TICK_DEC_MULT .5
 
-#define SUCCEEDED_TICK_INC 1.1
-#define SUCCEEDED_TICK_DEC .8
-
-#else
-
-#define SUCCEEDED_TICK_INC 1.1
-#define SUCCEEDED_TICK_DEC .8
-
-#endif
-
-#define SPEC_TRY_AFTER_FAILED 100
+#define SPEC_TRY_AFTER_FAILED 50
 
 #define SPEC_TICKS_TO_HOLD_SIGNAL 10000
 
@@ -103,7 +94,7 @@
 #define SPEC_ATTEMPT_THRESHOLD .85
 
 //if we don't meet the threshold, try again 20 times
-#define SPEC_ATTEMPT_AGAIN 20
+#define SPEC_ATTEMPT_AGAIN 100
 
 
 class speculation{
@@ -139,6 +130,7 @@ class speculation{
     uint64_t start_ticks;
     uint64_t seq_num;
     uint64_t failure_count;
+    uint64_t successful_commits;
     uint64_t tx_count;
     uint64_t signal_delay_ticks;
     double global_success_rate;
@@ -152,6 +144,10 @@ class speculation{
 #ifdef USE_FTRACE_DEBUGGING
     struct ftracer * tracer;
 #endif
+
+    //****STATS***
+    unsigned long revert_cs;
+    unsigned long spec_cs;
     
     spec_terminate_reason_type terminated_spec_reason;
 
@@ -187,7 +183,6 @@ class speculation{
             bool lockHeld = (entries[i].type==SPEC_ENTRY_LOCK) ? ((LockEntry *)entry)->is_acquired : false;
             if (__last_committed_is_larger(entry, logical_clock_start, tid) || lockHeld){
                 //this entry caused us to fail...update its stats
-                failure_count++;
                 update_global_success_rate(false);
                 specStatsFailed(entry, tid);
                 return false;
@@ -231,6 +226,10 @@ class speculation{
 #ifdef USE_DEBUG_COUNTER
         perf_counter=perfcounterlib_open(PERF_TYPE_RAW, (0x003CULL) | (0x0000ULL));
 #endif //END USE_DEBUG_COUNTER
+        revert_cs=0;
+        spec_cs=0;
+        successful_commits=0;
+        failure_count=0;
     }
 
 
@@ -249,13 +248,13 @@ class speculation{
 #ifdef SPEC_USE_TICKS
         if (succeeded && this->ticks >= max_ticks){
             //could use a max function here
-            max_ticks=((max_ticks*SUCCEEDED_TICK_INC)>SPECULATION_MAX_TICKS) ?
-                SPECULATION_MAX_TICKS : (max_ticks*SUCCEEDED_TICK_INC);
+            max_ticks=((max_ticks+SUCCEEDED_TICK_INC)>SPECULATION_MAX_TICKS) ?
+                SPECULATION_MAX_TICKS : (max_ticks+SUCCEEDED_TICK_INC);
         }
         else if (!succeeded){
             //could use a min function here
-            max_ticks=((max_ticks*SUCCEEDED_TICK_DEC)<SPECULATION_MIN_TICKS) ?
-                SPECULATION_MIN_TICKS : (max_ticks*SUCCEEDED_TICK_DEC);
+            max_ticks=((max_ticks*SUCCEEDED_TICK_DEC_MULT)<SPECULATION_MIN_TICKS) ?
+                SPECULATION_MIN_TICKS : (max_ticks*SUCCEEDED_TICK_DEC_MULT);
         }
 #endif
     }
@@ -292,9 +291,6 @@ class speculation{
                 exit(-1);
             }
             //we have to keep going here...since we're still "holding" a lock.
-            //cout << "nested...." << getpid() << " " << entry->id << " " << active_speculative_entries << " : ";
-            //print_active_sync_objects();
-            //cout << endl;
             return_val=true;
         }
         else if (entry==NULL){
@@ -319,7 +315,8 @@ class speculation{
             terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_OBJECT_COUNT;
             return_val=false;
         }
-        else if (ticks >= max_ticks){
+        //ignore every SPEC_ATTEMPT_AGAIN
+        else if (ticks >= max_ticks && !(seq_num % SPEC_ATTEMPT_AGAIN == 0) ){
             terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_TICKS;
             return_val=false; 
         }
@@ -350,6 +347,8 @@ class speculation{
             ftrace_off(tracer);
         }
 #endif //END FTRACE
+
+        seq_num++;
         
         return return_val;
     }
@@ -433,8 +432,10 @@ class speculation{
             return 0;
         }
         else if (!verify_synchronization() || active_speculative_entries > 0){
-            //cout << " failed tid " << tid << endl;
+            cout << " failed tid " << tid << endl;
             adaptSpeculation(false);
+            revert_cs+=entries_count;
+            failure_count++;
             entries_count=0;
             ticks=0;
             start_ticks=0;
@@ -480,14 +481,15 @@ class speculation{
              entry->last_committed=logical_clock;
              entry->committed_by=tid;
          }
-
+         spec_cs+=entries_count;
          entries_count=0;
          locks_count=0;
          buffered_signal=false;
          signal_delay_ticks=0;
          _checkpoint.is_speculating=false;
          ticks=0;
-         seq_num++;         
+         successful_commits++;
+         seq_num++;
      }
 
      void updateLastCommittedTime(void * entry_ptr, uint64_t logical_clock){
@@ -531,6 +533,24 @@ class speculation{
      uint64_t getTxCount(){
          return tx_count;
      }
+
+     double meanRevertCS(){
+         return (double)revert_cs/(double)failure_count;
+     }
+
+     double meanSpecCS(){
+         return (double)spec_cs/(double)successful_commits;
+     }
+
+     unsigned long getReverts(){
+         return failure_count;
+     }
+
+     unsigned long getCommits(){
+         return successful_commits;
+     }
+
+
 };
 
 #endif
