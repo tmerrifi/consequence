@@ -95,7 +95,8 @@ int xthread::cancel(void *v) {
 
   int threadindex = t->threadIndex;
 
-  kill(t->tid, SIGKILL);
+  kill(t->tid, SIGUSR1);
+  //kill(t->tid, SIGKILL);
 
   // Free the shared object held by this thread.
   //freeSharedObject(t, 4096);

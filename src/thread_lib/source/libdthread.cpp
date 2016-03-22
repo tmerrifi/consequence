@@ -33,11 +33,17 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <sys/types.h>
+#include <dlfcn.h>
+#include <unistd.h>
+#include <sys/syscall.h>   /* For SYS_xxx definitions */
 
 #include "debug.h"
 #include "prof.h"
 
 #include "xrun.h"
+
+#define _GNU_SOURCE
 
 #if defined(__GNUG__)
 void initialize() __attribute__((constructor));
@@ -168,10 +174,6 @@ int getpid(void) {
 	if(initialized) {
 		return xrun::id();
 	}
-	return 0;
-}
-
-int sched_yield(void) {
 	return 0;
 }
 
@@ -420,18 +422,37 @@ ssize_t read(int fd, void *buf, size_t count) {
         xrun::endSysCallActivate();
         return result;
     }
+
     
-  // DISABLED
-#if 0
-void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
-	int newflags = flags;
+    void * __conseq_mmap(void *addr, size_t length, int prot, int flags, int fd, off64_t offset) {
+    
+        if (initialized){
+            xrun::beginSysCall();
+        }
+        void * result = (void *)syscall(SYS_mmap, (unsigned long)addr, (unsigned long)length,
+                                            (unsigned long)prot, (unsigned long)flags,
+                                            (unsigned long) fd, (unsigned long)offset);
+        if (initialized){
+            xrun::endSysCall();
+        }
 
-	if (initialized == true && (flags & MAP_PRIVATE)) {
-		//		newflags = (flags & ~MAP_PRIVATE) | MAP_SHARED;
-		printf("flags %x and newflags %x\n", flags, newflags);
-	}
-	return WRAP(mmap)(addr, length, prot, newflags, fd, offset);
-}
-#endif
+        return result;
+    }
 
+
+    void * mmap64(void *addr, size_t length, int prot, int flags, int fd, off64_t offset) {
+        return __conseq_mmap(addr, length, prot, flags, fd, offset);
+    }
+    
+    void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+        return __conseq_mmap(addr, length, prot, flags, fd, offset);
+    }
+
+    int sched_yield(void){
+        if (initialized){
+            xrun::schedYield();
+        }
+        return 0;
+    }
+    
 }

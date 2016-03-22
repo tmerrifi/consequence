@@ -508,14 +508,7 @@ public:
               assert(condentry->head != NULL);
               isFound = true;
           }
-          break;
-          
-      case STATUS_BARR_WAITING: 
-      default:
-          // In fact, this case is almost impossible. But just in case, we put code here.
-          assert(0);
-          isFound = false;
-          break;
+          break;          
       }
       
       if (isFound) {
@@ -1246,6 +1239,7 @@ public:
       unlock();
       end_thread_event(threadindex, DEBUG_TYPE_WAIT_ON_COND);
       determ_task_clock_on_wakeup();
+      entry->status=STATUS_READY;
   }
 
   void cond_signal_inner(CondEntry * condentry){

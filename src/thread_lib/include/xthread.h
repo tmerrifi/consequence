@@ -91,7 +91,7 @@ private:
     
     /// @return a chunk of memory shared across processes.
     static void * allocateSharedObject(size_t sz) {
-        return mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        return WRAP(mmap)(NULL, sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     }
     
     static void freeSharedObject(void * ptr, size_t sz) {

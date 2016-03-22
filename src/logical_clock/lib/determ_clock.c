@@ -110,7 +110,13 @@ void * __open_shared_mem(){
     perror("couldn't open the shared mem file");
     exit(1);
   }
-  if ((mem = mmap(NULL,sizeof(struct determ_clock_info),PROT_READ | PROT_WRITE,MAP_SHARED | MAP_POPULATE,fd,0))==NULL){
+
+  //using syscall to avoid mmap which avoid reentrance into Consequence
+  mem = (void *)syscall(SYS_mmap, (unsigned long)NULL, (unsigned long)sizeof(struct determ_clock_info),
+                        (unsigned long)(PROT_READ | PROT_WRITE), (unsigned long)(MAP_SHARED | MAP_POPULATE),
+                        (unsigned long) fd, (unsigned long)0);
+            
+  if (mem==NULL){
     perror("mmap failed in determ_clock.c");
     exit(1);
   }

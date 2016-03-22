@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/ioctl.h>
-
+#include <sys/syscall.h>
 #include <asm/unistd.h>
 #include <sys/types.h>
 #include <sys/mman.h>
@@ -64,11 +64,13 @@ void perf_counter_init(u_int32_t sample_period, int32_t group_fd, struct perf_co
     exit(EXIT_FAILURE);
   }
 
-  void * ring_buffer;
+  void * ring_buffer = (void *)syscall(SYS_mmap, (unsigned long)NULL, (unsigned long)PAGE_SIZE + (PAGE_SIZE * 64),
+                        (unsigned long)(PROT_READ | PROT_WRITE), (unsigned long)(MAP_SHARED),
+                        (unsigned long) fd, (unsigned long)0);
+
 
   //16MB ring buffer
-  if ((ring_buffer = mmap(NULL, PAGE_SIZE + (PAGE_SIZE * 64) , PROT_READ | PROT_WRITE,
-			  MAP_SHARED, fd, 0)) == MAP_FAILED) {
+  if (ring_buffer == MAP_FAILED) {
       
       fprintf(stderr, "\nFAILED! %d fd %d %d\n", getpid(), fd, errno);
       perror("FAILED");

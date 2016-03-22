@@ -124,11 +124,10 @@ public:
   /// @brief Initialize the system.
   static void initialize(void) {
 
-    void* buf = mmap(NULL, sizeof(speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void* buf = WRAP(mmap)(NULL, sizeof(speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     _speculation = new (buf) speculation(0);
-    buf = mmap(NULL, sizeof(debug_user_memory), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    buf = WRAP(mmap)(NULL, sizeof(debug_user_memory), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     debug_mem = new (buf) debug_user_memory(0);
-    alive=true;
     reverts=0;
     spec_dirty_count=0;
     locks_elided=0;
@@ -158,7 +157,7 @@ public:
         monitor_address=0xDEAD;
     }
     
-    //installSignalHandler();
+    installSignalHandler();
 
     pid_t pid = syscall(SYS_getpid);
 
@@ -197,6 +196,7 @@ public:
     determ_task_clock_activate();
     //start this thread's clock
     startClock();
+    alive=true;
   }
 
     static bool singleActiveThread(void){
@@ -326,7 +326,7 @@ public:
     reverts=0;
     locks_elided=0;
     
-    void* buf = mmap(NULL, sizeof(_speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void* buf = WRAP(mmap)(NULL, sizeof(_speculation), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     //only do this if we've forked a new thread. 
     if (newThread){
         _speculation = new (_speculation) speculation(_thread_index);
@@ -525,8 +525,8 @@ public:
     stopClockForceEndNoCoarsen();
     waitToken();
     commitAndUpdateMemoryTerminateSpeculation();
-    threadindex = xthread::cancel(v);
     determ::getInstance().cancel(threadindex);
+    threadindex = xthread::cancel(v);
 #ifdef PRINT_SCHEDULE
     cout << "SCHED: CANCEL THREAD - tid: " << _thread_index << " target " << threadindex << endl;
     fflush(stdout);
@@ -1372,20 +1372,20 @@ public:
   }
 
   static void beginSysCall(){
-      if (_initialized && alive && _speculation->isSpeculating()){
+      if (_initialized && alive){
           stopClockForceEnd();
-          bool acquiringToken=(!_token_holding);
-          if (acquiringToken){
-              waitToken();
-          }          
-          commitAndUpdateMemoryTerminateSpeculation();
-          endTXCoarsening();
+          waitToken();
+          if (_speculation && _speculation->isSpeculating()){
+              commitAndUpdateMemoryTerminateSpeculation();
+              endTXCoarsening();
+          }
       }
   }
 
 
   static void endSysCall(){
       if (_initialized && alive){
+          putToken();
           startClock();
       }
   }
@@ -1434,10 +1434,20 @@ public:
   }
   
     static void commitAndUpdateMemoryTerminateSpeculation(){
-        terminateSpeculation();
+        if (_speculation->isSpeculating()){
+            terminateSpeculation();
+        }
         commitAndUpdateMemory();
     }
 
+    static void commitAndUpdateMemoryTerminateSpeculationParallel(){
+        if (_speculation->isSpeculating()){
+            terminateSpeculation();
+        }
+        commitAndUpdateMemoryParallelBegin();
+    }
+
+    
     static void commitAndUpdateMemory(struct local_copy_stats * stats){
         assert(!_speculation->isSpeculating());
         determ::getInstance().commitInSerial(_thread_index,stats);
@@ -1481,11 +1491,13 @@ public:
     /***END PARALLEL COMMIT***/
     
     static void sigstopHandle(int signum, siginfo_t * siginfo, void * context) {
-        stopClock();
-        waitToken();
-        commitAndUpdateMemory();
-        putToken();
-        startClock();
+        if (_speculation){
+            cout << "specstats: " << characterize_lock_count << "," << characterize_lock_count_spec << "," <<
+                signals_count << "," << spec_signals_count << "," <<
+                characterize_barrier_wait << "," <<
+                token_acq << "," <<_speculation->getReverts() << "," << _speculation->getCommits() << "," <<
+                _speculation->meanRevertCS() << "," << _speculation->meanSpecCS() << endl;
+        }
     }
 
 
@@ -1497,11 +1509,25 @@ public:
         siga.sa_flags = SA_SIGINFO | SA_RESTART | SA_NODEFER;
         siga.sa_sigaction = sigstopHandle;
         if (sigaction(SIGUSR1, &siga, NULL) == -1) {
-            perror("sigaction(SIGUSR1)");
             exit(-1);
         }
         sigprocmask(SIG_UNBLOCK, &siga.sa_mask, NULL);
 
+    }
+
+#define SCHED_YIELD_WAIT 100000
+    
+    static void schedYield(void){
+        //wait for a bit to grab the token
+        for (int i=0;i<SCHED_YIELD_WAIT;i++){
+            Pause();
+        }
+        stopClockForceEnd();
+        waitToken();
+        commitAndUpdateMemoryTerminateSpeculationParallel();
+        putToken();
+        commitAndUpdateMemoryParallelEnd();
+        startClock();
     }
 };
 
