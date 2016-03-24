@@ -491,10 +491,6 @@ void task_clock_entry_activate_other(struct task_clock_group_info * group_info, 
 #if defined(DEBUG_TASK_CLOCK_COARSE_GRAINED)
     printk(KERN_EMERG "TASK CLOCK: activating_other %d activating %d\n", current->task_clock.tid, id);
 #endif
-    if (group_info->clocks[id].initialized!=1){
-        group_info->clocks[id].base_ticks=__get_clock_ticks(group_info, current->task_clock.tid) + 1;
-        group_info->clocks[id].ticks=0;
-    }
     group_info->clocks[id].initialized=1;
     __clear_entry_state_by_id(group_info, id);
     __mark_as_active(group_info, id);
