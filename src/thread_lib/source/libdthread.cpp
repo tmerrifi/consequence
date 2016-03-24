@@ -405,7 +405,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 
     
     void perror ( const char * str ){
-        cout << str << endl;
+        cout << str << " " << getpid() << endl;
     }
 
     int nanosleep(const struct timespec * rec, struct timespec * rem){
