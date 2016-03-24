@@ -37,12 +37,12 @@ int count_array(){
 
 void validate(int id, int iteration){
     //estimate the count in the current array
-    int count = (iteration*NUM_OF_PAGES*THREADS) + NUM_OF_PAGES;
+    int count = (iteration*NUM_OF_PAGES*THREADS);
     //count up the "real" array
     int real_count = count_array();
     //if they don't match, we have a problem
     if (count != real_count){
-        fprintf(stderr, "FAILURE\n");
+        fprintf(stderr, "FAILURE %d count %d, real count %d\n", id, count, real_count);
     }
 }
 
@@ -52,10 +52,10 @@ void * run (void * input){
     for (int i=0;i<ITERATIONS;++i){
         //increment bytes in memory
         do_work(id);
-        //Validate to make sure what is in memory is what is expected
-        validate(id,i);
         //wait for our friends
         pthread_barrier_wait(&barrier);
+        //Validate to make sure what is in memory is what is expected
+        validate(id,i+1);
     }
     return NULL;
 }
