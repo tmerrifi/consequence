@@ -690,7 +690,7 @@ public:
           wait_cycles = determ_task_clock_read_cycle_counter() - start_cycles;
 #endif
           //fast forward our clock
-          determ_task_clock_add_ticks_lazy(fast_forward_clock() + (TOKEN_ACQ_ADD_CLOCK * determ::getInstance().active_threads_get()));
+          determ_task_clock_add_ticks(fast_forward_clock() + (TOKEN_ACQ_ADD_CLOCK * determ::getInstance().active_threads_get()));
           _token_holding=true;
           //we just got out of a coarsened tx...should we increase or decrease the granularity?
           if (tx_monitor_next){
