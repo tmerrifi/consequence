@@ -445,7 +445,8 @@ public:
       determ_task_clock_add_ticks(LOGICAL_CLOCK_ROUND_ROBIN_FORKED_THREAD);
 #endif
         //now release the token so other threads can keep on chuggin'
-        putTokenNoFastForward();
+        //putTokenNoFastForward();
+        putToken();
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_FORK, NULL);
         *tid = (pthread_t)xthread::spawn(fn, arg, _thread_index, tpe);
         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_FORK);

@@ -29,16 +29,11 @@
 
 #define __max(val1, val2) ((val1>val2) ? val1 : val2)
 
-#define __get_clock_ticks(group_info, tid) (group_info->clocks[tid].ticks + group_info->clocks[tid].base_ticks)
+#define __get_clock_ticks(group_info, tid) (group_info->clocks[tid].ticks)
 
 #define __set_ticks_in_userspace(group_info, tid)   \
     group_info->user_status_arr[tid].ticks=__get_clock_ticks(group_info,tid);
-//current->task_clock.user_status->ticks=__get_clock_ticks(group_info,tid);
 
-
-#define __set_base_ticks(group_info, tid, val) (group_info->clocks[tid].base_ticks=val)
-
-#define __get_base_ticks(group_info, tid) (group_info->clocks[tid].base_ticks)
 
 #define __tick_counter_turn_off(group_info) \
     group_info->clocks[__current_tid()].count_ticks=0;
@@ -64,7 +59,9 @@
     current->task_clock.user_status->ticks_to_add=0; \
     }
 
-#define __set_clock_ticks(group_info, tid, val) (group_info->clocks[tid].ticks=val)
+#define __set_clock_ticks(group_info, tid, val)\
+    group_info->clocks[tid].ticks=val; \
+    __set_ticks_in_userspace(group_info,tid);
 
 
 #define __clock_is_lower(group_info, tid1, tid2) ( ((__get_clock_ticks(group_info, tid1))  < (__get_clock_ticks(group_info, tid2))) \
