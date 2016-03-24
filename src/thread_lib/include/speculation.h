@@ -185,7 +185,7 @@ class speculation{
                 //this entry caused us to fail...update its stats
                 update_global_success_rate(false);
                 specStatsFailed(entry, tid);
-                cout << "failed due to.... " << entry << " " << getpid() << " max ticks: " << max_ticks << " ticks: " << ticks << " ec:" << entries_count << endl;
+                //cout << "failed due to.... " << entry << " " << getpid() << " max ticks: " << max_ticks << " ticks: " << ticks << " ec:" << entries_count << endl;
                 return false;
             }
             else{
