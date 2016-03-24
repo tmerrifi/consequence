@@ -689,9 +689,11 @@ public:
 #ifdef TRACK_LIBRARY_CYCLES
           wait_cycles = determ_task_clock_read_cycle_counter() - start_cycles;
 #endif
+          //cout << "ff tid: " << _thread_index << " " << fast_forward_clock() << endl;
           //fast forward our clock
           determ_task_clock_add_ticks(fast_forward_clock() + (TOKEN_ACQ_ADD_CLOCK * determ::getInstance().active_threads_get()));
           _token_holding=true;
+          //cout << "got token tid: " << _thread_index << " " << determ_task_clock_read() << endl;
           //we just got out of a coarsened tx...should we increase or decrease the granularity?
           if (tx_monitor_next){
               if(determ::getInstance().getLastTokenPutter()==_thread_index){
