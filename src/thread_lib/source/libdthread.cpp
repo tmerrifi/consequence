@@ -102,6 +102,15 @@ void * malloc(size_t sz) {
 
 void * calloc(size_t nmemb, size_t sz) {
 	void * ptr;
+
+        if (nmemb==0){
+            return NULL;
+        }
+        else if (sz==0){
+            //this is silly but ferret from Parsec 2.1 relies on this undefined behavior
+            sz=1;
+        }
+
 	if (!initialized) {
 		DEBUG("Pre-initialization calloc call forwarded to mmap");
 		ptr = mmap(NULL, sz * nmemb, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);

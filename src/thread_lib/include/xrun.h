@@ -554,9 +554,16 @@ public:
       }
       return ptr;
   }
+    
   static inline void * calloc(size_t nmemb, size_t sz) {
-      return conseq_malloc::calloc(nmemb, sz);
+      void * result=NULL;
+      if (nmemb!=0 && sz!=0){
+          result=malloc(nmemb * sz);
+          memset(result, 0, nmemb*sz);
+      }
+      return result;
   }
+    
   static inline void free(void * ptr) {
       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_FREE, NULL);
       conseq_malloc::free(ptr);
