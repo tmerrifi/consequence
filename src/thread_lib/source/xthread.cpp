@@ -95,8 +95,10 @@ int xthread::cancel(void *v) {
 
   int threadindex = t->threadIndex;
 
-  kill(t->tid, SIGUSR1);
-  //kill(t->tid, SIGKILL);
+  //turn this on if we need to signal threads to get specstats
+  //kill(t->tid, SIGUSR1);
+  
+  kill(t->tid, SIGKILL);
 
   // Free the shared object held by this thread.
   //freeSharedObject(t, 4096);
