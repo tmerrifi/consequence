@@ -91,8 +91,8 @@ inline void specStatsSuccess(SyncVarEntry * syncEntry, int tid){
     syncEntry->stats.results[tid]=(syncEntry->stats.results[tid]<<1)|1;
 }
 
-inline void specStatsFailed(SyncVarEntry * syncEntry, int tid){
-    syncEntry->stats.results[tid]=(syncEntry->stats.results[tid]<<1);
+inline void specStatsFailed(SyncVarEntry * syncEntry, int tid, int penalty){
+    syncEntry->stats.results[tid]=(syncEntry->stats.results[tid]<<penalty);
 }
 
 inline double specStatsSuccessRate(SyncVarEntry * syncEntry, int tid){

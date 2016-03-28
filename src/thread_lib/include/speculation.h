@@ -5,13 +5,10 @@
 #include <math.h>
 #include "checkpoint.h"
 #include "sync_types.h"
-
 #include "conseq_malloc.h"
-
 #include "determ.h"
-
 #include "debug.h"
-
+#include "simple_stack.h"
 #include <determ_clock.h>
 #include <perfcounterlib.h>
 
@@ -96,6 +93,9 @@
 //if we don't meet the threshold, try again 20 times
 #define SPEC_ATTEMPT_AGAIN 100
 
+#define SPEC_FAILURE_PENALTY_NORMAL 1
+#define SPEC_FAILURE_PENALTY_HIGH 10
+
 
 class speculation{
 
@@ -148,6 +148,9 @@ class speculation{
     //****STATS***
     unsigned long revert_cs;
     unsigned long spec_cs;
+
+    /**** A stack to use for keeping track of nested critical sections*****/
+    struct simple_stack * nested_stack;
     
     spec_terminate_reason_type terminated_spec_reason;
 
@@ -184,7 +187,7 @@ class speculation{
             if (__last_committed_is_larger(entry, logical_clock_start, tid) || lockHeld){
                 //this entry caused us to fail...update its stats
                 update_global_success_rate(false);
-                specStatsFailed(entry, tid);
+                specStatsFailed(entry, tid, SPEC_FAILURE_PENALTY_NORMAL);
                 //cout << "failed due to.... " << entry << " " << getpid() << " max ticks: " << max_ticks << " ticks: " << ticks << " ec:" << entries_count << endl;
                 return false;
             }
@@ -231,6 +234,8 @@ class speculation{
         spec_cs=0;
         successful_commits=0;
         failure_count=0;
+        nested_stack=simple_stack_init(SPECULATION_ENTRIES_MAX_ALLOCATED);
+        cout << "testing..." << nested_stack->max_len << endl;
     }
 
 
@@ -388,6 +393,8 @@ class speculation{
         }
         else if (type == SPEC_ENTRY_LOCK) {
             active_speculative_entries++;
+            simple_stack_push(nested_stack, entry);
+            cout << "pushed... " << nested_stack->current_len << "  " << nested_stack->max_len << endl;
             locks_count++;
         }
         
@@ -427,12 +434,27 @@ class speculation{
          return _checkpoint.is_speculating;
     }
 
-    
-     int validate(){
+     
+     int validate(bool forcedTerminate){
+         bool result;
+         
         if (!isSpeculating()){
             return 0;
         }
-        else if (!verify_synchronization() || active_speculative_entries > 0){
+        else if (!(result=verify_synchronization()) || active_speculative_entries > 0){
+            cout << "revert " << logical_clock_start << " " << getpid()
+                 << " " << active_speculative_entries << " " << result << " " << entries_count << endl;
+            if (forcedTerminate && active_speculative_entries>0){
+                //if this happens we need to make sure we don't speculate on this lock when we retry. We also take this one step further
+                //and heavily penalize the lock, as it appears to be protecting a CS that is going to do something we don't like (system call?).
+                //So we find all the active (or nested) locks and penalize them
+                SyncVarEntry * active_entry;
+                cout << "active1 " << nested_stack->current_len << endl;
+                while((active_entry=(SyncVarEntry *)simple_stack_pop(nested_stack))!=NULL){
+                    specStatsFailed(active_entry, tid, SPEC_FAILURE_PENALTY_HIGH);
+                    cout << "active2 " << active_entry << endl;
+                }
+            }
             adaptSpeculation(false);
             revert_cs+=entries_count;
             failure_count++;
@@ -441,6 +463,7 @@ class speculation{
             start_ticks=0;
             locks_count=0;
             active_speculative_entries=0;
+            simple_stack_clear(nested_stack);
             buffered_signal=false;
             signal_delay_ticks=0;
             _checkpoint.checkpoint_revert();
@@ -454,6 +477,7 @@ class speculation{
      void endSpeculativeEntry(void * entry_ptr){
          assert(active_speculative_entries>0);
          active_speculative_entries--;
+         simple_stack_pop(nested_stack);
      }
      
      void commitSpeculation(uint64_t logical_clock){
@@ -490,6 +514,7 @@ class speculation{
          ticks=0;
          successful_commits++;
          seq_num++;
+         simple_stack_clear(nested_stack);
      }
 
      void updateLastCommittedTime(void * entry_ptr, uint64_t logical_clock){
@@ -550,6 +575,9 @@ class speculation{
          return successful_commits;
      }
 
+     unsigned long getLogicalClockStart(){
+         return logical_clock_start;
+     }
 
 };
 

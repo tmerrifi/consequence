@@ -305,7 +305,7 @@ public:
             return 1;
         }
 #else
-        return _speculation->validate();
+        return _speculation->validate(false);
 #endif
     }
     
@@ -1189,7 +1189,7 @@ public:
       //lets get the token...
       waitToken();
       if (_speculation->isSpeculating()){
-          terminateSpeculation();
+          terminateSpeculation(true);
       }
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
       determ::getInstance().barrier_wait(barrier, _thread_index);
@@ -1386,7 +1386,8 @@ public:
           stopClockForceEnd();
           waitToken();
           if (_speculation && _speculation->isSpeculating()){
-              commitAndUpdateMemoryTerminateSpeculation();
+              cout << "beginSysSpec " << _speculation->getLogicalClockStart() << " " << getpid() << endl;
+              commitAndUpdateMemoryTerminateSpeculationForced();
               endTXCoarsening();
           }
       }
@@ -1432,9 +1433,9 @@ public:
   }
 
 
-  static void terminateSpeculation(){
+  static void terminateSpeculation(bool forcedTerminate){
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK, NULL);
-      if (_speculation->validate()){
+      if (_speculation->validate(forcedTerminate)){
           determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
           determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, (void *)_speculation->getTerminateReasonType());
           locks_elided+=_speculation->getEntriesCount();
@@ -1445,18 +1446,34 @@ public:
   
     static void commitAndUpdateMemoryTerminateSpeculation(){
         if (_speculation->isSpeculating()){
-            terminateSpeculation();
+            terminateSpeculation(false);
         }
         commitAndUpdateMemory();
     }
 
     static void commitAndUpdateMemoryTerminateSpeculationParallel(){
         if (_speculation->isSpeculating()){
-            terminateSpeculation();
+            terminateSpeculation(false);
         }
         commitAndUpdateMemoryParallelBegin();
     }
 
+    static void commitAndUpdateMemoryTerminateSpeculationForced(){
+        if (_speculation->isSpeculating()){
+            terminateSpeculation(true);
+        }
+        commitAndUpdateMemory();
+    }
+
+    
+    static void commitAndUpdateMemoryTerminateSpeculationParallelForced(){
+        if (_speculation->isSpeculating()){
+            terminateSpeculation(true);
+        }
+        commitAndUpdateMemoryParallelBegin();
+    }
+
+    
     
     static void commitAndUpdateMemory(struct local_copy_stats * stats){
         assert(!_speculation->isSpeculating());
