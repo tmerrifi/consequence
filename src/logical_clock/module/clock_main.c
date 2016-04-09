@@ -206,6 +206,10 @@ int __determine_lowest_and_notify_or_wait(struct task_clock_group_info * group_i
         __set_current_thread_to_lowest(group_info);
     }
     else{
+        //lets clear the single active thread flag
+        if (current->task_clock.user_status->single_active_thread){
+            current->task_clock.user_status->single_active_thread=0;
+        }
         //we set ourselves to be waiting, this may change
         group_info->clocks[current->task_clock.tid].waiting=1;
         //figure out who the lowest clock is
@@ -469,6 +473,7 @@ void task_clock_entry_activate(struct task_clock_group_info * group_info){
   current->task_clock.user_status->notifying_diff=0;
   current->task_clock.user_status->hit_bounded_fence=0;
   current->task_clock.user_status->period_sets=0;
+  current->task_clock.user_status->single_active_thread=0;
   
   group_info->clocks[current->task_clock.tid].userspace_reading=0;
     //if I'm the new lowest, we need to set the flag so userspace can see that that is the case
@@ -486,11 +491,10 @@ void task_clock_entry_activate(struct task_clock_group_info * group_info){
 }
 
 void task_clock_entry_activate_other(struct task_clock_group_info * group_info, int32_t id){
-    
-    spin_lock(&group_info->lock);
 #if defined(DEBUG_TASK_CLOCK_COARSE_GRAINED)
     printk(KERN_EMERG "TASK CLOCK: activating_other %d activating %d\n", current->task_clock.tid, id);
-#endif
+#endif    
+    spin_lock(&group_info->lock);
     if (group_info->clocks[id].initialized!=1){
         //set ticks to zero
         __set_clock_ticks(group_info, id, 0);
@@ -503,9 +507,9 @@ void task_clock_entry_activate_other(struct task_clock_group_info * group_info, 
     //another thread may be convinced it is the lowest
     if (group_info->lowest_tid < 0 || __clock_is_lower(group_info, id, group_info->lowest_tid)){
         current->task_clock.user_status->activated_lowest=1;
-    }
-
+    }    
     spin_unlock(&group_info->lock);
+    current->task_clock.user_status->single_active_thread=0;
 }
 
 
