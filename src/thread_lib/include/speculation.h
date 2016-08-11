@@ -394,7 +394,6 @@ class speculation{
         else if (type == SPEC_ENTRY_LOCK) {
             active_speculative_entries++;
             simple_stack_push(nested_stack, entry);
-            cout << "pushed... " << nested_stack->current_len << "  " << nested_stack->max_len << endl;
             locks_count++;
         }
         
@@ -442,17 +441,13 @@ class speculation{
             return 0;
         }
         else if (!(result=verify_synchronization()) || active_speculative_entries > 0){
-            cout << "revert " << logical_clock_start << " " << getpid()
-                 << " " << active_speculative_entries << " " << result << " " << entries_count << endl;
             if (forcedTerminate && active_speculative_entries>0){
                 //if this happens we need to make sure we don't speculate on this lock when we retry. We also take this one step further
                 //and heavily penalize the lock, as it appears to be protecting a CS that is going to do something we don't like (system call?).
                 //So we find all the active (or nested) locks and penalize them
                 SyncVarEntry * active_entry;
-                cout << "active1 " << nested_stack->current_len << endl;
                 while((active_entry=(SyncVarEntry *)simple_stack_pop(nested_stack))!=NULL){
                     specStatsFailed(active_entry, tid, SPEC_FAILURE_PENALTY_HIGH);
-                    cout << "active2 " << active_entry << endl;
                 }
             }
             adaptSpeculation(false);
