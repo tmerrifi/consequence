@@ -259,7 +259,7 @@ public:
     }
 
 
-    static inline void commit_parallel(int heapVersionToWaitFor, int globalsVersionToWaitFor){
+    static inline void commit_parallel(uint64_t heapVersionToWaitFor, uint64_t globalsVersionToWaitFor){
         //cout << "commit " << getpid() << endl;
         _pheap.commit_parallel(heapVersionToWaitFor);
         _globals.commit_parallel(globalsVersionToWaitFor);

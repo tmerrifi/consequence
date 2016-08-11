@@ -232,7 +232,8 @@ public:
         conv_checkpoint(snap_memory);
     }
     
-    inline void commit_parallel(int versionToWaitFor){
+    inline void commit_parallel(uint64_t versionToWaitFor){
+        int debug_counter=0;
         if (get_dirty_pages() > 0){
             while(conv_get_linearized_version_num(snap_memory)<versionToWaitFor){
                 Pause();
