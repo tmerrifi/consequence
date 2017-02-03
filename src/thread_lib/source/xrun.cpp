@@ -29,6 +29,7 @@ int xrun::characterize_barrier_wait;
 int xrun::spec_signals_count;
 int xrun::signals_count;
 int xrun::characterize_lock_count_spec;
+int xrun::characterize_lock_count_spec_fast_path;
 /*DEBUGGING*/
 size_t xrun::monitor_address;
 /***********/

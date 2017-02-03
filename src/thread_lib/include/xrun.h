@@ -55,6 +55,7 @@
 #include <sys/resource.h>
 #include <determ_clock.h>
 #include <signal.h>
+#include <errno.h>
 
 #define MAX_SLEEP_COUNT 10
 
@@ -112,7 +113,7 @@ private:
     static uint64_t _last_token_release_time;
 
     //statistics stuff
-    static int characterize_lock_count, characterize_lock_count_spec, characterize_barrier_wait;
+    static int characterize_lock_count, characterize_lock_count_spec, characterize_barrier_wait, characterize_lock_count_spec_fast_path;
     static int spec_signals_count, signals_count;
     
     static size_t monitor_address;
@@ -143,6 +144,7 @@ public:
     globalsVersionToWaitFor=0;
     characterize_lock_count=0;
     characterize_lock_count_spec=0;
+    characterize_lock_count_spec_fast_path=0;
     characterize_barrier_wait=0;
     spec_signals_count=0;
     signals_count=0;
@@ -373,14 +375,13 @@ public:
           ThreadPool::getInstance().add_thread_to_pool_by_id(_thread_index);
       }
 
-      cout << "specstats: " << characterize_lock_count << "," << characterize_lock_count_spec << "," <<
-          signals_count << "," << spec_signals_count << "," <<
+      cout << "specstats: locks: " << characterize_lock_count << ", spec locks: " << 
+	  characterize_lock_count_spec << ", spec locks fastpath: " << 
+          characterize_lock_count_spec_fast_path << ", signals: " <<
+          signals_count << ", spec signals: " << spec_signals_count << ", barriers: " <<
           characterize_barrier_wait << "," <<
-          token_acq << "," <<_speculation->getReverts() << "," << _speculation->getCommits() << "," <<
-          _speculation->meanRevertCS() << "," << _speculation->meanSpecCS() << endl;
-
-
-
+          token_acq << ", reverts: " <<_speculation->getReverts() << ", commits: " << _speculation->getCommits() << ", revertCSLength: " <<
+          _speculation->meanRevertCS() << ", specCSLength: " << _speculation->meanSpecCS() << endl;
       
       xmemory::sleep();
       alive=false;
@@ -425,10 +426,10 @@ public:
         //now, lets initialize the thread so that there is not a race with it to get the token
         waitToken();
         //cout << "SPAWN: ending speculation " << getpid() << endl;
-        if (_lock_count>0){
-            cout << "FORKING WHILE HOLDING A LOCK...not currently supported" << endl;
-            exit(-1);
-        }
+//      if (_lock_count>0){
+//          cout << "FORKING WHILE HOLDING A LOCK...not currently supported" << endl;
+//          exit(-1);
+//      }
 
 #ifdef PRINT_SCHEDULE
         cout << "SCHED: CREATING THREAD - tid: " << _thread_index << endl;
@@ -825,6 +826,8 @@ public:
         bool isSingleActiveThread=false;
         int failure_count=0;
         int stack_lock_count=++_lock_count;
+	unsigned long long begin, end;
+	begin = __rdtsc();
 retry:
         bool isSpeculating=_speculation->isSpeculating();
         //should we use the tx coarsening?
@@ -836,7 +839,10 @@ retry:
         isSingleActiveThread= !isSpeculating && singleActiveThread();
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
-        //unsigned long long cycle_begin=__rdtsc();
+
+        //cout << "use coarsening??? " << isUsingTxCoarsening << " single active " << 
+          //  isSingleActiveThread << " " << failure_count << " " << _lock_count << " pid " << getpid() << endl;
+
         if (!isSingleActiveThread && !isUsingTxCoarsening && (failure_count==0) &&
             !(isSpeculating==false && _lock_count>1) &&
             _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult)){
@@ -853,8 +859,12 @@ retry:
                     //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_TX_START, NULL);  
                     xmemory::begin_speculation();
                     //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
+                    //cout << "beginning spec lock count " << getpid() << endl;
                 }
                 characterize_lock_count_spec++;
+		if (begin % 100 == 0) {
+		    cout << "speclock " << __rdtsc() - begin << endl;
+		}
                 return;
             }
             else{
@@ -933,17 +943,34 @@ retry:
         if (!isSingleActiveThread && !isUsingTxCoarsening){
             putToken();
         }
-  
-        if (finishCommit){
-            commitAndUpdateMemoryParallelEnd();
+	if (finishCommit){
+	    commitAndUpdateMemoryParallelEnd();
         }
     }
 
-    static void mutex_lock(pthread_mutex_t * mutex) {
+    static inline void mutex_lock(pthread_mutex_t * mutex) {
+//	unsigned long long start;
+//	bool trace=false;
+//	if (characterize_lock_count_spec_fast_path % 200 == 0) {
+//	    start=__rdtsc();
+//	    trace=true;
+//	}
         bool isSpeculating = _speculation->isSpeculating();
-        stopClock();
-
-        
+        #ifdef NO_DETERM_SYNC
+            if (false && isSpeculating && _speculation->shouldSpeculateFastPathLock(mutex, get_ticks_for_speculation())) {
+        #else
+            if (false && isSpeculating && _speculation->shouldSpeculateFastPathLock(mutex, _last_token_release_time)) {
+        #endif
+                characterize_lock_count_spec++;
+		characterize_lock_count_spec_fast_path++;
+                _lock_count++;
+		//cout << "lock count fast path...." << _lock_count << " " << getpid() << endl;
+//		if (trace) {
+//		    cout << "fast " << __rdtsc() - start << endl;
+//		}
+		return;
+        }
+	stopClock();        
         //**************DEBUG CODE**************
 #ifdef EVENT_VIEWER
         if (isSpeculating){
@@ -994,13 +1021,12 @@ retry:
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
 #endif
       //*************END DEBUG CODE*********************
-      bool isSpeculating=_speculation->isSpeculating();
-            
+      bool isSpeculating=_speculation->isSpeculating();            
       assert(_lock_count>0);
       _lock_count--;
 #ifdef DTHREADS_TASKCLOCK_DEBUG
       cout << "UNLOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read()
-             << " tid " << _thread_index << " lockcount " << _lock_count << " m: " << mutex << endl;
+             << " tid " << _thread_index << " lock count " << _lock_count << " m: " << mutex << " " << getpid() << endl;
 #endif
 
       if (isSpeculating){
@@ -1450,11 +1476,13 @@ retry:
     
     static void sigstopHandle(int signum, siginfo_t * siginfo, void * context) {
         if (_speculation){
-            cout << "specstats: " << characterize_lock_count << "," << characterize_lock_count_spec << "," <<
-                signals_count << "," << spec_signals_count << "," <<
+            cout << "specstats: locks: " << characterize_lock_count << ", spec locks: " << 
+                characterize_lock_count_spec << ", spec locks fastpath: " << 
+                characterize_lock_count_spec_fast_path << ", signals: " <<
+                signals_count << ", spec signals: " << spec_signals_count << ", barriers: " <<
                 characterize_barrier_wait << "," <<
-                token_acq << "," <<_speculation->getReverts() << "," << _speculation->getCommits() << "," <<
-                _speculation->meanRevertCS() << "," << _speculation->meanSpecCS() << endl;
+                token_acq << ", reverts: " <<_speculation->getReverts() << ", commits: " << _speculation->getCommits() << ", revertCSLength: " <<
+                _speculation->meanRevertCS() << ", specCSLength: " << _speculation->meanSpecCS() << endl;
         }
     }
 
