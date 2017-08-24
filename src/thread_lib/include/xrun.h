@@ -862,9 +862,6 @@ retry:
                     //cout << "beginning spec lock count " << getpid() << endl;
                 }
                 characterize_lock_count_spec++;
-		if (begin % 100 == 0) {
-		    cout << "speclock " << __rdtsc() - begin << endl;
-		}
                 return;
             }
             else{

@@ -196,14 +196,14 @@ class speculation{
                 //this entry caused us to fail...update its stats
                 update_global_success_rate(false);
                 specStatsFailed(entry, tid, SPEC_FAILURE_PENALTY_NORMAL);
-		cout << "failed due to.... " << entry << " " << getpid() << " max ticks: " << max_ticks << " ticks: " << ticks << " ec:" << entries_count << endl;
+		//cout << "failed due to.... " << entry << " " << getpid() << " max ticks: " << max_ticks << " ticks: " << ticks << " ec:" << entries_count << endl;
                 return false;
             }
             else{
                 update_global_success_rate(true);
             }
         }
-	 cout << "succeeded " << getpid() << " max ticks: " << max_ticks << " ticks: " << ticks << " ec:" << entries_count << endl;
+	 //cout << "succeeded " << getpid() << " max ticks: " << max_ticks << " ticks: " << ticks << " ec:" << entries_count << endl;
 	 return true;
     }
     
@@ -245,7 +245,6 @@ class speculation{
         successful_commits=0;
         failure_count=0;
         nested_stack=simple_stack_init(SPECULATION_ENTRIES_MAX_ALLOCATED);
-        cout << "testing..." << nested_stack->max_len << endl;
     }
 
 
