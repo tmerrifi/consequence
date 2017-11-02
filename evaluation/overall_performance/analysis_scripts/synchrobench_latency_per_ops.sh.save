@@ -1,0 +1,32 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+cat $1 | grep "remove" | awk '{tot[int($2/100000)]++;}END{print "remove..."; for (i in tot){print i*100000" "tot[i];}}'
+
+cat $1 | grep "contains" | awk '{tot[int($2/100000)]++;}END{print "contains...."; for (i in tot){print i*100000" "tot[i];}}'

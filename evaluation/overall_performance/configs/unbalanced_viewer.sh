@@ -1,0 +1,5 @@
+progs="tests-unbalanced-100-w0"
+variants="viewer=true mode=ICSpec clockmode=Cycles tokenclockadd=35000 minperiod=1000 maxperiod=50000"
+threads="8"
+trials="1"
+ops_pattern="cat $1 | grep OPS"

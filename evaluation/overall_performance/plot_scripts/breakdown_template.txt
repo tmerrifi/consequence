@@ -1,0 +1,11 @@
+=stackcluster;Wait on Token Release;Wait on Logical Clock;User Work;Misc. Consequence;Memory Commit/Update
+=nogridy
+=noupperright
+legendx=right
+legendy=center
+yformat=%.2f%%
+ylabel=Percentage of Execution Time
+xscale=1.6
+colors=black,grey2,grey4,grey6,grey7
+=table
+
