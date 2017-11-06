@@ -488,22 +488,15 @@ public:
     // Get the joinee's thread index.
     child_threadindex = xthread::getThreadIndex(v);
 
-    xmemory::sleep();
-
 #ifdef PRINT_SCHEDULE
     cout << "SCHED: BEGIN JOIN - tid: " << _thread_index << " target " << child_threadindex << endl;
     fflush(stdout);
 #endif
 
-
     // When child is not finished, current thread should wait on cond var until child is exited.
     // It is possible that children has been exited, then it will make sure this.
     determ::getInstance().join(child_threadindex, _thread_index, wakeupChildren);
-
     determ_task_clock_add_ticks(fast_forward_clock());
-
-    xmemory::wake();
-
     commitAndUpdateMemory();
 
 #ifdef PRINT_SCHEDULE

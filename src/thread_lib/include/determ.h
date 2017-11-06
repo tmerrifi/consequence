@@ -946,7 +946,8 @@ public:
     ThreadEntry * wakeupEntry;
     bool toWaitToken = false;
     bool halted = false;
-
+    
+    xmemory::sleep();
     lock();
 
     // Get next entry.
@@ -994,8 +995,9 @@ public:
     //parent needs to at least activate first and get back "in the running" before
     //the child gives up the token. 
     myentry->status = STATUS_READY;
-
     unlock(); 
+    xmemory::wake();
+
     if(toWaitToken) {
         getToken(myindex);
     }
