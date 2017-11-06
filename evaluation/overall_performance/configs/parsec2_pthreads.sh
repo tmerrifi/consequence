@@ -1,5 +1,10 @@
-progs="parsec2-dedup parsec2-watern parsec2-revindex parsec2-blackscholes"
+progs="parsec2-blackscholes parsec2-canneal parsec2-dedup parsec2-ferret"
+progs=$progs" parsec2-fft parsec2-kmeans parsec2-linear_regression parsec2-lu_cb"
+progs=$progs" parsec2-lu_ncb parsec2-matrix_multiply parsec2-ocean_cp parsec2-ocean_ncp"
+progs=$progs" parsec2-pca parsec2-radix parsec2-revindex parsec2-streamcluster"
+progs=$progs" parsec2-string_match parsec2-watern parsec2-water_nsquared parsec2-water_spatial parsec2-word_count"
+
 variants="pthreads|pthreads|gcc-pthreads"
-threads="1"
+threads="2"
 trials="1"
 ops_pattern=""

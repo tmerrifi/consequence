@@ -1,6 +1,6 @@
 #arg1: path to config file
 #arg2: comment on this run
-
+    
 function usage(){
 	echo "./run.sh -n <name> -c <config> [ -p ]";
 	printf "\n\n";
@@ -58,6 +58,12 @@ echo $trials > out/$seq/trials;
 rm -rf $CONSEQ_PATH/evaluation/clock_skew/output/$seq
 mkdir $CONSEQ_PATH/evaluation/clock_skew/output/$seq
 
+splash_size=simmedium;
+
+lastVariant="";
+
+echo "variant,program,threads,key,value,error" > out/${seq}/statsAll;
+
 for p in $progs
 do
 	echo $p >> out/$seq/progs;
@@ -70,7 +76,8 @@ do
 		vconfig=`echo $v | awk -F '|' '{print $3}'`;
 		#compile this variant
 		v=`echo $v | awk -F '|' '{print $1;}'`;
-		if [ $vconfig = "gcc-consequence" ]
+
+		if [[ "$vtitle" != $lastVariant && $vconfig = "gcc-consequence" ]]
 		then
 			#compile the library
 			cd $CONSEQ_PATH;
@@ -78,13 +85,13 @@ do
 			./compile_conseq.sh "`echo $v | sed s/"_"/" "/g`" &>> /tmp/conseq_compile_log_$vname;
 			cd - &> /dev/null;
 			cd $SYNCHROBENCH_PATH/c-cpp;
-			make clean;
+			make clean &> /dev/null;
 			make lock use_consequence=true &>> /tmp/synchrobench_compile_log_$vname;
+			lastVariant="$vtitle";
 			cd -;
 		else
-			echo "no compile pthreads..."
 			cd $SYNCHROBENCH_PATH/c-cpp;
-			make clean;
+			make clean &> /dev/null;
                         make lock &>> /tmp/synchrobench_compile_log_$vname;
                         cd -;
 		fi
@@ -99,7 +106,7 @@ do
 				outfile=output_$p"_"$vname"_"$t"_"$i;
 				export logfile=out/$seq/log/$outfile;
 				sudo truncate -s0 /var/log/syslog;
-				(timeout 500s ./progs/"$p".sh $t $vconfig) &> out/$seq/log/$outfile;
+				(timeout 500s ./progs/"$p".sh $t $vconfig $splash_size) &> out/$seq/log/$outfile;
 				#ops=`eval $ops_pattern | awk '{t+=$1;}END{print t}'`;
 				if [ -z $ops ]
 				then
@@ -123,21 +130,20 @@ do
 	                        echo $((mins+rest))" "$ops" "$token >> /tmp/results; #out/$seq/$p"_"$vname"_"$t"_"$i;
 				#Ok, lets analyze this run
                                 viewer=`echo $v | grep "viewer=" | wc -l`;
-                                #if [ $viewer = 1 ]
-                                #then
-                                #        cd $CONSEQ_PATH/evaluation/thread_events_viewer;
-                                #        ./chop_up_events_and_plot.sh $fulllogpath 3 200 5 $p"_"$vname"_"$t"_"$i"_"$seq;
-                                #        cd -;
-				#	filename=$p"_"$vname"_"$t"_"$i;
-	                        #        cd $CONSEQ_PATH/evaluation/clock_skew;
-        	                #        ./compute_wakeup_latency_logical.sh $fulllogpath $filename $seq;
-                	        #        cd -;
-                                #fi
 			done;
 			echo $t `./meanAndStddev.sh /tmp/results 3` >> out/$seq/$p"_"$vname"_token"
 			echo $t `./meanAndStddev.sh /tmp/results 2` >> out/$seq/$p"_"$vname"_ops"
 			echo $t `./meanAndStddev.sh /tmp/results 1` >> out/$seq/$p"_"$vname"_time"
 			echo $t $stats >> out/$seq/$p"_"$vname"_stats"
+			#process the stats (potentially)
+			if [ -n "$parseConversionStats" ]
+			then
+			    ./convert_conversion_stats_to_csv.sh -d out/${seq} -l $kernlogpath -n $p -v $vtitle -t $t;
+			fi
+			#put it into our giant csv file, format:
+			#variant,program,threads,key,value,error
+			echo ${vtitle},${p},${t},OPS,`./meanAndStddev.sh /tmp/results 2 | sed s/" "/","/g` >> out/${seq}/statsAll;
+			echo ${vtitle},${p},${t},RUNTIME,`./meanAndStddev.sh /tmp/results 1 | sed s/" "/","/g` >> out/${seq}/statsAll;
 		done;
 		ops_files=$p"_"$vname"_ops,"$ops_files;
 		time_files=$p"_"$vname"_time,"$time_files;
@@ -160,6 +166,8 @@ cd $CONSEQ_PATH/tests;
 make clean &> /dev/null;
 make &> /dev/null;
 cd -;
+rm -rf lastExperiment/*; 
+cp out/${seq}/* lastExperiment;
 rm -f $SYNCHROBENCH_PATH/c-cpp/bin/grace* $SYNCHROBENCH_PATH/c-cpp/bin/TASK*;
 
 
