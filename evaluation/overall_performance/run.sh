@@ -6,6 +6,9 @@ function usage(){
 	printf "\n\n";
 }
 
+#set scaling
+for i in `seq 0 63`; do sudo cpufreq-set -c $i -g performance; done;
+
 #get the sequence number
 seq=`cat seqnum`;
 seq=$((seq+1))
@@ -62,7 +65,9 @@ splash_size=simmedium;
 
 lastVariant="";
 
-echo "variant,program,threads,key,value,error" > out/${seq}/statsAll;
+echo "variant,program,threads,key,value,error,cyclesKeyNum" > out/${seq}/statsAll;
+
+echo "variant,program,threads,key,value" > out/$seq/convLatencyCounters.csv
 
 for p in $progs
 do
@@ -106,11 +111,14 @@ do
 				outfile=output_$p"_"$vname"_"$t"_"$i;
 				export logfile=out/$seq/log/$outfile;
 				sudo truncate -s0 /var/log/syslog;
-				(timeout 500s ./progs/"$p".sh $t $vconfig $splash_size) &> out/$seq/log/$outfile;
-				#ops=`eval $ops_pattern | awk '{t+=$1;}END{print t}'`;
-				if [ -z $ops ]
+				(timeout 500s taskset -c 0-$((t-1)) ./progs/"$p".sh $t $vconfig $splash_size) &> out/$seq/log/$outfile;
+				export rawOutputFile=out/${seq}/log/${outfile};
+
+				if [ -z "$ops_pattern" ]
 				then
 					ops=0;
+				else
+					ops=`eval $ops_pattern | awk '{t+=$1;}END{print t}'`;
 				fi
 	                        #get minutes in milliseconds
      		               	mins=`cat out/$seq/log/$outfile | grep real | awk -F 'm' '{print $1}' | awk '{print $2*1000*60}'`
