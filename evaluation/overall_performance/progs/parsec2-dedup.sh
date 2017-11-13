@@ -5,18 +5,18 @@ then
     threads=1;
 elif [[ $1 -lt 16 ]]
 then
-    threads=4;
+    threads=2;
 elif [[ $1 -lt 32 ]]
 then
-    threads=7;
+    threads=4;
 elif [[ $1 -lt 48 ]]
 then
     threads=10;
 elif [[ $1 -lt 64 ]]
 then
-    threads=10;
+    threads=18;
 else
-    threads=10;
+    threads=25;
 fi
 
 cd /local_home/tmerrifi/dthreads/eval/tests/dedup;
