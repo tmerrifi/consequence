@@ -111,7 +111,16 @@ do
 				outfile=output_$p"_"$vname"_"$t"_"$i;
 				export logfile=out/$seq/log/$outfile;
 				sudo truncate -s0 /var/log/syslog;
-				(timeout 500s taskset -c 0-$((t-1)) ./progs/"$p".sh $t $vconfig $splash_size) &> out/$seq/log/$outfile;
+
+				if [ -z "$cpuAffinityPattern" ]
+				then
+				    if [ $t -lt 9 ]
+				    then
+					cpuAffinityPattern="taskset -c 0-7";
+				    fi
+				fi
+
+				(timeout 500s $cpuAffinityPattern ./progs/"$p".sh $t $vconfig $splash_size) &> out/$seq/log/$outfile;
 				export rawOutputFile=out/${seq}/log/${outfile};
 
 				if [ -z "$ops_pattern" ]
