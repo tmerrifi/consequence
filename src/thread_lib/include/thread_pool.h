@@ -43,6 +43,10 @@
 
 #include "real.h"
 
+#define DISABLE_THREAD_POOL 1
+
+//#define DTHREADS_TASKCLOCK_DEBUG 1
+
 //The thread-pool class is used to avoid costly thread startup times. It gives us
 //a place to park threads after they finish running, and on fork we can grab a 
 //thread from here.
