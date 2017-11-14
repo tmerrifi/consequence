@@ -112,11 +112,13 @@ do
 				export logfile=out/$seq/log/$outfile;
 				sudo truncate -s0 /var/log/syslog;
 
-				if [ -z "$cpuAffinityPattern" ]
+				if [ -z "$forcedCpuAffinityPattern" ]
 				then
 				    if [ $t -lt 9 ]
 				    then
 					cpuAffinityPattern="taskset -c 0-7";
+				    else
+					cpuAffinityPattern="";
 				    fi
 				fi
 
