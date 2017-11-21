@@ -295,6 +295,7 @@ class speculation{
 
 
     bool inline shouldSpeculateFastPathLock(void * entry_ptr, uint64_t logical_clock){
+        unsigned long long startcycles = __rdtsc();
         SyncVarEntry *entry = (SyncVarEntry *)getSyncEntry(entry_ptr);
 	if (entries_count < SPECULATION_ENTRIES_MAX_ALLOCATED && entries_count < max_sync_objs &&
 	    entry != NULL && (active_speculative_entries > 0 || seq_num % SPECULATION_FAST_PATH_DEPTH != 0) &&
@@ -305,6 +306,9 @@ class speculation{
             entries_count++;
             active_speculative_entries++;
             seq_num++;
+            if (seq_num % 1000 == 0) {
+                cout << "f " << __rdtsc() - startcycles << endl;
+            }
             return true;
         }
         else{
@@ -314,7 +318,7 @@ class speculation{
     
     bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
         bool return_val;
-        //unsigned long long startcycles = __rdtsc();
+        unsigned long long startcycles = __rdtsc();
         updateTicks();
         SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
         
@@ -384,6 +388,9 @@ class speculation{
 #endif //END FTRACE
 
         seq_num++;
+        if (seq_num % 5000 == 0) {
+            cout << "ss " << __rdtsc() - startcycles << endl;
+        }
         //cout << "results " << return_val << " reason " << terminated_spec_reason << endl;
         return return_val;
     }
