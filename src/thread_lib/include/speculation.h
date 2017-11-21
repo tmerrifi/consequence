@@ -236,6 +236,13 @@ class speculation{
 #endif //END USE_DEBUG_COUNTER
     }
 
+     static unsigned long long __rdtsc(void)
+     {
+        unsigned long low, high;
+        asm volatile("rdtsc" : "=a" (low), "=d" (high));
+        return ((low) | (high) << 32);
+     }
+     
 
     void updateTicks(){
 #ifdef SPEC_USE_TICKS
@@ -282,6 +289,7 @@ class speculation{
     
     bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
         bool return_val;
+        unsigned long long startcycles = __rdtsc();
         updateTicks();
         SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
 
@@ -349,6 +357,10 @@ class speculation{
         }
 #endif //END FTRACE
         
+        if (rand() % 2000 == 0) {
+            cout << "ss " << __rdtsc() - startcycles << endl;
+        }
+
         return return_val;
     }
     
