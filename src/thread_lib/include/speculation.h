@@ -388,7 +388,7 @@ class speculation{
 #endif //END FTRACE
 
         seq_num++;
-        if (seq_num % 5000 == 0) {
+        if (seq_num % 2500 == 0) {
             cout << "ss " << __rdtsc() - startcycles << endl;
         }
         //cout << "results " << return_val << " reason " << terminated_spec_reason << endl;
