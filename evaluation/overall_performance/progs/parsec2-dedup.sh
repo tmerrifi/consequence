@@ -11,13 +11,11 @@ then
     threads=4;
 elif [[ $1 -lt 48 ]]
 then
-    threads=10;
-elif [[ $1 -lt 64 ]]
-then
-    threads=18;
+    threads=8;
 else
-    threads=25;
+    threads=8;
 fi
+
 
 cd /local_home/tmerrifi/dthreads/eval/tests/dedup;
 
