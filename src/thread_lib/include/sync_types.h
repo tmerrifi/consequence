@@ -100,6 +100,9 @@ inline double specStatsSuccessRate(SyncVarEntry * syncEntry, int tid){
     return result;
 }
 
+inline int specStatsSucceededLastTime(SyncVarEntry * syncEntry, int tid){
+    return syncEntry->stats.results[tid] & 0x1UL;
+}
 
 
 #endif
