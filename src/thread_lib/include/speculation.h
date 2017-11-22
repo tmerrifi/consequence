@@ -39,7 +39,7 @@
 
 //this number will be adjusted during adaptation
 #ifndef SPECULATION_MAX_TICKS
-#define SPECULATION_MAX_TICKS 150000
+#define SPECULATION_MAX_TICKS 1000000
 #endif
 
 //we never adapt less than this number
