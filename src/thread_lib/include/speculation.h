@@ -192,12 +192,18 @@ class speculation{
                    determ_task_clock_force_read()<<  endl;*/
                 update_global_success_rate(false);
                 entry->getStats(tid)->specFailed();
+                if (tid == 10) {
+                   cout << " failed " << entry->id << " " << entry->getStats(tid)->specPercentageOfSuccess() << endl;
+                }
                 return false;
             }
             else{
                 //cout << "verified tid: " << tid << " " << entry << " " << entry->last_committed << " " << logical_clock_start << endl;
                 update_global_success_rate(true);
                 entry->getStats(tid)->specSucceeded();
+                if (tid == 10) {
+                   cout << " successful " << entry->id << " " << entry->getStats(tid)->specPercentageOfSuccess() << endl;
+                }
             }
         }
         return true;
@@ -292,6 +298,7 @@ class speculation{
         unsigned long long startcycles = __rdtsc();
         updateTicks();
         SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
+        terminated_spec_reason = SPEC_TERMINATE_REASON_NONE;
 
         if (active_speculative_entries > 0){
             if (getSyncEntry(entry_ptr)==NULL){
@@ -359,6 +366,11 @@ class speculation{
         
         if (rand() % 2000 == 0) {
             cout << "ss " << __rdtsc() - startcycles << endl;
+        }
+
+        if (tid == 10) {
+           cout << "results: " << return_val << " reason " << terminated_spec_reason << 
+              " id " << entry->id << " ticks " << ticks << " max " << max_ticks << " percent " << entry->getStats(tid)->specPercentageOfSuccess() << endl;
         }
 
         return return_val;
@@ -486,6 +498,10 @@ class speculation{
              
              entry->last_committed=logical_clock;
              entry->committed_by=tid;
+         }
+
+         if (tid == 10) {
+             cout << "spec_cs: " << entries_count << endl;
          }
 
          entries_count=0;
