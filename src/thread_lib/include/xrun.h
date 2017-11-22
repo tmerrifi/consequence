@@ -836,7 +836,7 @@ retry:
         //cout << "use coarsening??? " << isUsingTxCoarsening << " single active " << 
           //  isSingleActiveThread << " " << failure_count << " " << _lock_count << " pid " << getpid() << endl;
 
-        if (!isSingleActiveThread && !isUsingTxCoarsening && (failure_count==0) &&
+        if (!isUsingTxCoarsening && (failure_count==0) &&
             !(isSpeculating==false && _lock_count>1) &&
             _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult)){
             //Here we begin or continue speculation...in the event that a speculation is reverted we will

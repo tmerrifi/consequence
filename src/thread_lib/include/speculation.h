@@ -93,7 +93,7 @@
 #define EWMA_ALPHA .1F
 
 //only try if we believe this is going to work this percentage of the time
-#define SPEC_ATTEMPT_THRESHOLD .85
+#define SPEC_ATTEMPT_THRESHOLD .70
 
 //if we don't meet the threshold, try again 20 times
 #define SPEC_ATTEMPT_AGAIN 100
