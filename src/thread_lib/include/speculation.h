@@ -386,12 +386,9 @@ class speculation{
             ftrace_off(tracer);
         }
 #endif //END FTRACE
-
-        seq_num++;
-        if (seq_num % 2500 == 0) {
-            cout << "ss " << __rdtsc() - startcycles << endl;
+        if (tid == 10) {
+            cout << "results " << return_val << " reason " << terminated_spec_reason << " " << entry->id << endl;
         }
-        //cout << "results " << return_val << " reason " << terminated_spec_reason << endl;
         return return_val;
     }
     
@@ -542,6 +539,9 @@ class speculation{
              
              entry->last_committed=logical_clock;
              entry->committed_by=tid;
+         }
+         if (tid == 10) {
+             cout << "spec_cs: " << entries_count << endl;
          }
          spec_cs+=entries_count;
          entries_count=0;

@@ -379,9 +379,9 @@ public:
 	  characterize_lock_count_spec << ", spec locks fastpath: " << 
           characterize_lock_count_spec_fast_path << ", signals: " <<
           signals_count << ", spec signals: " << spec_signals_count << ", barriers: " <<
-          characterize_barrier_wait << "," <<
+          characterize_barrier_wait << ", token acq" <<
           token_acq << ", reverts: " <<_speculation->getReverts() << ", commits: " << _speculation->getCommits() << ", revertCSLength: " <<
-          _speculation->meanRevertCS() << ", specCSLength: " << _speculation->meanSpecCS() << endl;
+          _speculation->meanRevertCS() << ", specCSLength: " << _speculation->meanSpecCS() << ", tid: " << _thread_index << endl;
       
       xmemory::sleep();
       alive=false;
