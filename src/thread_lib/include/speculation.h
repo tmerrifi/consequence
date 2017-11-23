@@ -295,7 +295,6 @@ class speculation{
 
 
     bool inline shouldSpeculateFastPathLock(void * entry_ptr, uint64_t logical_clock){
-        unsigned long long startcycles = __rdtsc();
         SyncVarEntry *entry = (SyncVarEntry *)getSyncEntry(entry_ptr);
 	if (entries_count < SPECULATION_ENTRIES_MAX_ALLOCATED && entries_count < max_sync_objs &&
 	    entry != NULL && (active_speculative_entries > 0 || seq_num % SPECULATION_FAST_PATH_DEPTH != 0) &&
@@ -306,9 +305,6 @@ class speculation{
             entries_count++;
             active_speculative_entries++;
             seq_num++;
-            if (seq_num % 1000 == 0) {
-                cout << "f " << __rdtsc() - startcycles << endl;
-            }
             return true;
         }
         else{
@@ -335,9 +331,7 @@ class speculation{
             terminated_spec_reason = SPEC_TERMINATE_REASON_UNINITIALIZED;
             return_val=false;
         }
-        //if we're about to speculate on a lock that is likely to cause a conflict, lets not to it
-        //else if (entry->getStats(tid)->specPercentageOfSuccess() < SPEC_SYNC_MIN_THRESHOLD ){
-        //if (!__shouldAttempt( entry->getStats(tid)->specPercentageOfSuccess() )){
+        //if we're about to speculate on a lock that is likely to cause a conflict, lets not do it
         else if (!__shouldAttempt( specStatsSuccessRate(entry,tid))){
             terminated_spec_reason = SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK;
             entry_ended_spec=entry;
@@ -386,9 +380,6 @@ class speculation{
             ftrace_off(tracer);
         }
 #endif //END FTRACE
-        if (tid == 10) {
-            cout << "results " << return_val << " reason " << terminated_spec_reason << " " << entry->id << endl;
-        }
         return return_val;
     }
     
@@ -539,9 +530,6 @@ class speculation{
              
              entry->last_committed=logical_clock;
              entry->committed_by=tid;
-         }
-         if (tid == 10) {
-             cout << "spec_cs: " << entries_count << endl;
          }
          spec_cs+=entries_count;
          entries_count=0;
