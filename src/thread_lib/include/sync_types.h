@@ -2,6 +2,7 @@
 #define CONSEQ_SYNC_TYPES_H
 
 #include "xmemory.h"
+#include "xdefines.h"
 #include "list.h"
 #include "syncstats.h"
 
@@ -66,41 +67,40 @@ inline void * allocSyncEntry(int size, int counter) {
     return syncEntry;
   }
 
-  inline void freeSyncEntry(void * ptr) {
+  inline void ALWAYS_INLINE freeSyncEntry(void * ptr) {
       if (ptr != NULL) {
           InternalHeap::getInstance().free(ptr);
       }
   }
 
-  inline void * getSyncEntry(void * entry) {
-    return(*((void **)entry));
-  }
+static inline void * ALWAYS_INLINE getSyncEntry(void * entry) {
+  return(*((void **)entry));
+}
 
-  inline void setSyncEntry(void * origentry, void * newentry) {
+static inline void ALWAYS_INLINE setSyncEntry(void * origentry, void * newentry) {
       *((size_t *)origentry)=(size_t)newentry;
   }
 
-  inline void clearSyncEntry(void * origentry) {
+static inline void ALWAYS_INLINE clearSyncEntry(void * origentry) {
     void **dest = (void**)origentry;
     *dest = NULL;
     // Update the shared copy in the same time. 
     xmemory::mem_write(*dest, NULL);
   }
 
-inline void specStatsSuccess(SyncVarEntry * syncEntry, int tid){
+static inline void ALWAYS_INLINE specStatsSuccess(SyncVarEntry * syncEntry, int tid){
     syncEntry->stats.results[tid]=(syncEntry->stats.results[tid]<<1)|1;
 }
 
-inline void specStatsFailed(SyncVarEntry * syncEntry, int tid, int penalty){
+static inline void ALWAYS_INLINE specStatsFailed(SyncVarEntry * syncEntry, int tid, int penalty){
     syncEntry->stats.results[tid]=(syncEntry->stats.results[tid]<<penalty);
 }
 
-inline double specStatsSuccessRate(SyncVarEntry * syncEntry, int tid){
-    double result = ((double)__builtin_popcountl(syncEntry->stats.results[tid]))/64.0 ;
-    return result;
+static inline double ALWAYS_INLINE specStatsSuccessRate(SyncVarEntry * syncEntry, int tid){
+   return ((double)__builtin_popcountl(syncEntry->stats.results[tid]))/64.0 ;
 }
 
-inline int specStatsSucceededLastTime(SyncVarEntry * syncEntry, int tid){
+static inline int ALWAYS_INLINE specStatsSucceededLastTime(SyncVarEntry * syncEntry, int tid){
     return syncEntry->stats.results[tid] & 0x1UL;
 }
 

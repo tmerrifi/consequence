@@ -48,6 +48,8 @@ extern runtime_data_t *global_data;
 
 #define Pause()        asm volatile("rep; nop" ::: "memory")
 
+#define ALWAYS_INLINE __attribute__((always_inline))
+
 #define PERSIST_COMMIT_NORMAL 0
 #define PERSIST_COMMIT_MERGE_ONLY 2
 #define PERSIST_COMMIT_UPDATE_ONLY 3
