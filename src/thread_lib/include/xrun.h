@@ -301,10 +301,13 @@ public:
     static int endSpeculation(void){
 #ifdef EVENT_VIEWER
         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK, NULL);
-        if (_speculation->validate()){
+        if (_speculation->validate(false)){
             determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_SPECULATIVE_VALIDATE_OR_ROLLBACK);
             determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_END_SPECULATION, (void *)_speculation->getTerminateReasonType());
             return 1;
+        }
+        else{
+            return 0;
         }
 #else
         return _speculation->validate(false);
