@@ -258,21 +258,14 @@ class speculation{
     }
 
     void adaptSpeculation(bool succeeded){
-        //first, should we adapt at all?
 #ifdef SPEC_USE_TICKS
-        if (succeeded && this->ticks >= max_ticks){
-            //could use a max function here
-            max_ticks=((max_ticks+SUCCEEDED_TICK_INC)>SPECULATION_MAX_TICKS) ?
-                SPECULATION_MAX_TICKS : (max_ticks+SUCCEEDED_TICK_INC);
-	    max_sync_objs = (max_sync_objs < SPECULATION_ENTRIES_MAX) ? 
-		max_sync_objs++ : max_sync_objs;
+        if (succeeded){
+            max_ticks = xmin(max_ticks + SUCCEEDED_TICK_INC, SPECULATION_MAX_TICKS);
+            max_sync_objs = xmin(max_sync_objs + 1, SPECULATION_ENTRIES_MAX);
         }
-        else if (!succeeded){
-            //could use a min function here
-            max_ticks=((max_ticks*SUCCEEDED_TICK_DEC_MULT)<SPECULATION_MIN_TICKS) ?
-                SPECULATION_MIN_TICKS : (max_ticks*SUCCEEDED_TICK_DEC_MULT);
-	    max_sync_objs = (max_sync_objs > SPECULATION_START_MAX_SYNC_OBJS) ? 
-		max_sync_objs/2 : max_sync_objs;
+        else{
+            max_ticks = xmax(max_ticks/2, SPECULATION_MIN_TICKS);
+            max_sync_objs = xmax(max_sync_objs/2, 1);
         }
 #endif
     }
