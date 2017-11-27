@@ -823,7 +823,6 @@ public:
         int failure_count=0;
         int stack_lock_count=++_lock_count;
 	unsigned long long begin, end;
-	begin = __rdtsc();
 retry:
         bool isSpeculating=_speculation->isSpeculating();
         //should we use the tx coarsening?
@@ -835,10 +834,6 @@ retry:
         isSingleActiveThread= !isSpeculating && singleActiveThread();
         //We can't speculate when we are using coarsening, because we are already holding the lock and that
         //doesn't make much sense.
-
-        //cout << "use coarsening??? " << isUsingTxCoarsening << " single active " << 
-          //  isSingleActiveThread << " " << failure_count << " " << _lock_count << " pid " << getpid() << endl;
-
         if (!isUsingTxCoarsening && (failure_count==0) &&
             !(isSpeculating==false && _lock_count>1) &&
             _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult)){
@@ -852,10 +847,7 @@ retry:
                 if (!isSpeculating){
                     //HERE we know that we are beginning a speculation
                     spec_dirty_count=0;
-                    //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_TX_START, NULL);  
                     xmemory::begin_speculation();
-                    //determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_BEGIN_SPECULATION, (void *)id);
-                    //cout << "beginning spec lock count " << getpid() << endl;
                 }
                 characterize_lock_count_spec++;
                 return;
@@ -942,27 +934,7 @@ retry:
     }
 
     static inline void mutex_lock(pthread_mutex_t * mutex) {
-//	unsigned long long start;
-//	bool trace=false;
-//	if (characterize_lock_count_spec_fast_path % 200 == 0) {
-//	    start=__rdtsc();
-//	    trace=true;
-//	}
         bool isSpeculating = _speculation->isSpeculating();
-        #ifdef NO_DETERM_SYNC
-            if (false && isSpeculating && _speculation->shouldSpeculateFastPathLock(mutex, get_ticks_for_speculation())) {
-        #else
-            if (false && isSpeculating && _speculation->shouldSpeculateFastPathLock(mutex, _last_token_release_time)) {
-        #endif
-                characterize_lock_count_spec++;
-		characterize_lock_count_spec_fast_path++;
-                _lock_count++;
-		//cout << "lock count fast path...." << _lock_count << " " << getpid() << endl;
-//		if (trace) {
-//		    cout << "fast " << __rdtsc() - start << endl;
-//		}
-		return;
-        }
 	stopClock();        
         //**************DEBUG CODE**************
 #ifdef EVENT_VIEWER
@@ -1002,7 +974,6 @@ retry:
 
 
   static void mutex_unlock(pthread_mutex_t * mutex) {
-      //unsigned long long start = __rdtsc();
       stopClock((size_t)mutex);
       //**************DEBUG CODE**************
 #ifdef EVENT_VIEWER
@@ -1031,9 +1002,6 @@ retry:
           determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_UNLOCK, mutex);
           determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
 #endif
-          //*************END DEBUG CODE*********************
-	  //unsigned long long end = __rdtsc();
-	  //cout << "unlockSpec: " << end-start << " " << mutex << " " << getpid() << endl ;  
           return;
       }
 
@@ -1088,10 +1056,7 @@ retry:
       cout << "SCHED: MUTEX UNLOCK - tid: " << _thread_index << " var: " << determ::getInstance().get_syncvar_id(mutex) << " " << determ_task_clock_read() << " " << determ_debug_notifying_clock_read() << endl;
       fflush(stdout);
 #endif
-
-
       _speculation->updateLastCommittedTime(mutex,get_ticks_for_speculation());
-
 
       if (!isSingleActiveThread && !isUsingTxCoarsening){
           //release the token
@@ -1113,8 +1078,6 @@ retry:
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
       //*************END DEBUG CODE*********************
       startClock();
-      //unsigned long long end = __rdtsc();
-      //cout << "unlockNonSpec: " << end-start << " " << mutex << " " << getpid() << endl;
   }
 
     
