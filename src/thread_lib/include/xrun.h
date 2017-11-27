@@ -974,6 +974,7 @@ retry:
 
 
   static void mutex_unlock(pthread_mutex_t * mutex) {
+      bool lock_owner = false;
       stopClock((size_t)mutex);
       //**************DEBUG CODE**************
 #ifdef EVENT_VIEWER
@@ -988,21 +989,23 @@ retry:
       bool isSpeculating=_speculation->isSpeculating();            
       assert(_lock_count>0);
       _lock_count--;
+      //**************DEBUG CODE**************
 #ifdef DTHREADS_TASKCLOCK_DEBUG
       cout << "UNLOCK: starting lock " << determ_task_get_id() << " " << determ_task_clock_read()
              << " tid " << _thread_index << " lock count " << _lock_count << " m: " << mutex << " " << getpid() << endl;
 #endif
-
-      if (isSpeculating){
-          //we want to notify the speculation engine that we have released this lock
-          _speculation->endSpeculativeEntry(mutex);
-          //*****DEBUG CODE************************/
-#ifdef EVENT_VIEWER
-          determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
-          determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_UNLOCK, mutex);
-          determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
-#endif
-          return;
+      //*************END DEBUG CODE*********************
+      lock_owner = determ::getInstance().lock_is_current_owner(mutex, _thread_index);
+      if (isSpeculating && lock_owner == false){
+         //we want to notify the speculation engine that we have released this lock
+         _speculation->endSpeculativeEntry(mutex);
+         //*****DEBUG CODE************************/
+   #ifdef EVENT_VIEWER
+         determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_LIB);
+         determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_SPECULATIVE_UNLOCK, mutex);
+         determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
+   #endif
+         return;
       }
 
       bool isSingleActiveThread=!isSpeculating && singleActiveThread();
@@ -1035,9 +1038,16 @@ retry:
       //*****DEBUG CODE************************/
       determ::getInstance().add_atomic_event(_thread_index, DEBUG_TYPE_MUTEX_UNLOCK, mutex);
       //*************END DEBUG CODE*********************
-      if ((!singleActiveThread() && !isUsingTxCoarsening) || shouldUpdate || commitForWaitingThread){
+      if ((!isSingleActiveThread && !isUsingTxCoarsening) || shouldUpdate || commitForWaitingThread){
           determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_COMMIT, mutex);
-          commitAndUpdateMemoryParallelBegin();
+          if (isSpeculating) {
+             //terminating the speculation...this happens when we release a lock we hold "for real" while we
+             //do speculation on other sync variables.
+             commitAndUpdateMemoryTerminateSpeculationParallel();
+          }
+          else{
+             commitAndUpdateMemoryParallelBegin();
+          }
           finishCommit=true;
           determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_COMMIT);
       }
@@ -1065,6 +1075,11 @@ retry:
 
       if (finishCommit){
           commitAndUpdateMemoryParallelEnd();
+      }
+      
+      if (isSpeculating) {
+         assert(lock_owner);
+         assert(finishCommit);
       }
       
 #ifdef USE_TAGGING
