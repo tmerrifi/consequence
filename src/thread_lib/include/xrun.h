@@ -836,7 +836,7 @@ retry:
         //doesn't make much sense.
         if (!isUsingTxCoarsening && (failure_count==0) &&
             !(isSpeculating==false && _lock_count>1) &&
-            _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult)){
+            _speculation->shouldSpeculate(mutex, get_ticks_for_speculation(), &shouldSpecResult, speculation::SPEC_ENTRY_LOCK)){
             //Here we begin or continue speculation...in the event that a speculation is reverted we will
             //return false and continue on
 #ifdef NO_DETERM_SYNC
@@ -1211,7 +1211,7 @@ retry:
 
       /*speculative path*/
       if(!(wasSpeculating==false && _lock_count>0) &&
-         _speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult)){
+         _speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult, speculation::SPEC_ENTRY_BROADCAST)){
 #ifdef NO_DETERM_SYNC
           if (_speculation->speculate(cond,get_ticks_for_speculation(), speculation::SPEC_ENTRY_BROADCAST)==true){
 #else
@@ -1271,7 +1271,7 @@ retry:
       stopClock();
       if (_speculation->isSpeculating()){
           //should we continue speculating??
-          if (_speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult)){
+          if (_speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult, speculation::SPEC_ENTRY_SIGNAL)){
               //ready to add our entry
               _speculation->speculate(cond, _last_token_release_time, speculation::SPEC_ENTRY_SIGNAL);
               spec_signals_count++;

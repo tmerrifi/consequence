@@ -179,31 +179,33 @@ class speculation{
     }
 
 
-    inline bool __last_committed_is_larger(SyncVarEntry * entry, uint64_t clock, int tid){
+    inline bool ALWAYS_INLINE __last_committed_is_larger(SyncVarEntry * entry, uint64_t clock, int tid){
         return (entry->last_committed > clock ||
                 entry->last_committed==clock && entry->committed_by != tid);
     }
     
-     bool verify_synchronization(){
-         int r = rand();
-         for (int i=0;i<entries_count;i++){
+    inline bool ALWAYS_INLINE __verify_sync_entry(SyncVarEntry *entry, uint64_t clock, speculation_entry_type entry_type, int tid) {
+        //its possible that a lock was acquired prior to the start of our speculation, and yet still held. In that case, we will see that the "last_committed" field
+        //is less than our start time. Therefore, we need to verify that the lock is not currently held "for real."
+        bool lockHeld = (entry_type == SPEC_ENTRY_LOCK) ? ((LockEntry *)entry)->is_acquired : false;
+        return !lockHeld && !__last_committed_is_larger(entry, clock, tid);
+    }
+
+    bool verify_synchronization(){
+        int r = rand();
+        for (int i=0;i<entries_count;i++){
             SyncVarEntry * entry = entries[i].entry;
-            //its possible that a lock was acquired prior to the start of our speculation, and yet still held. In that case, we will see that the "last_committed" field
-            //is less than our start time. Therefore, we need to verify that the lock is not currently held "for real."
-            bool lockHeld = (entries[i].type==SPEC_ENTRY_LOCK) ? ((LockEntry *)entry)->is_acquired : false;
-            if (__last_committed_is_larger(entry, logical_clock_start, tid) || lockHeld){
+            if (__verify_sync_entry(entry, logical_clock_start, entries[i].type, tid)) {
+                update_global_success_rate(true);
+            }
+            else{
                 //this entry caused us to fail...update its stats
                 update_global_success_rate(false);
                 specStatsFailed(entry, tid, SPEC_FAILURE_PENALTY_NORMAL);
-		//cout << "failed due to.... " << entry << " " << getpid() << " max ticks: " << max_ticks << " ticks: " << ticks << " ec:" << entries_count << endl;
                 return false;
             }
-            else{
-                update_global_success_rate(true);
-            }
         }
-	 //cout << "succeeded " << getpid() << " max ticks: " << max_ticks << " ticks: " << ticks << " ec:" << entries_count << endl;
-	 return true;
+        return true;
     }
     
  public:
@@ -305,7 +307,7 @@ class speculation{
         }
     }
     
-    bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
+    bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result, speculation_entry_type entry_type){
         bool return_val;
         unsigned long long startcycles = __rdtsc();
         updateTicks();
@@ -356,7 +358,10 @@ class speculation{
             return_val=false;
         }
 #endif
-        else{
+        else if (isSpeculating() && !__verify_sync_entry(entry, logical_clock_start, entry_type, tid)) {
+            return_val=false;
+        }
+        else {
             last_seen_logical_clock=logical_clock;
             return_val=true;
         }
@@ -383,7 +388,7 @@ class speculation{
     }
 #else
 
-    bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result){
+    bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result, speculation_entry_type type){
         return false;
     }
 
@@ -392,7 +397,7 @@ class speculation{
     }
 
     bool inline shouldSpeculateFastPathLock(void * entry_ptr, uint64_t logical_clock){
-	return false;
+        return false;
     }
 
     
@@ -484,7 +489,6 @@ class speculation{
             signal_delay_ticks=0;
             //cout << "Reverting..." << getpid() << endl;
             _checkpoint.checkpoint_revert();
-	    errno=666;
         }
         else{
             adaptSpeculation(true);
