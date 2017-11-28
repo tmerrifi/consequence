@@ -69,6 +69,8 @@ echo "variant,program,threads,key,value,error,cyclesKeyNum" > out/${seq}/statsAl
 
 echo "variant,program,threads,key,value" > out/$seq/convLatencyCounters.csv
 
+timeoutSecs=500;
+
 for p in $progs
 do
 	echo $p >> out/$seq/progs;
@@ -122,7 +124,7 @@ do
 				    fi
 				fi
 
-				(timeout 500s $cpuAffinityPattern ./progs/"$p".sh $t $vconfig $splash_size) &> out/$seq/log/$outfile;
+				(timeout ${timeoutSecs}s $cpuAffinityPattern ./progs/"$p".sh $t $vconfig $splash_size) &> out/$seq/log/$outfile;
 				export rawOutputFile=out/${seq}/log/${outfile};
 
 				if [ -z "$ops_pattern" ]
