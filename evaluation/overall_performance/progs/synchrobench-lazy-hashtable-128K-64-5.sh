@@ -11,6 +11,6 @@
 
 cd $SYNCHROBENCH_PATH/c-cpp/bin/;
 ls;
-./MUTEX-hashtable -i $((1<<20)) -r $((1<<21)) -l 8 -t $1 -u 20 -d $((1000*60)) -x 0;
+./MUTEX-hashtable -i $((1<<17)) -r $((1<<18)) -l 64 -t $1 -u 5 -d $((1000*30)) -x 2;
 rm *.mem* TASK_CLOCK*;
 cd -;
