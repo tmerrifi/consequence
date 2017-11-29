@@ -665,7 +665,6 @@ public:
     static u_int64_t fast_forward_clock(){
         int64_t clockDiff, clockDiffReturn;
         clockDiffReturn=0;
-#ifdef FAST_FORWARD
         //if the token's clock is greater than ours.
         //we add one to ensure we avoid the situation where we wakeup a thread with a lower id
         //and it gets the same logical clock as the previous thread. So now it has the same clock
@@ -677,10 +676,24 @@ public:
         if (clockDiff > 0){
             clockDiffReturn=clockDiff;
         }
-#endif
+
         return clockDiffReturn;
     }
     
+    //total hack to avoid recompiling the kernel, since the system call for add ticks is 32bit
+    static void __add_ticks_to_clock(uint64_t ticks){
+       uint64_t total = 0;
+       uint64_t calls = ticks / (1<<30);
+       uint64_t remainder = ticks % (1<<30);
+       for (int i = 0; i < calls; i++) {
+          determ_task_clock_add_ticks((1<<30));
+          total+=(1<<30);
+       }
+       determ_task_clock_add_ticks(remainder);
+       total+=remainder;
+       assert(total==ticks);
+    }
+
     static int waitToken(void) {
       struct timespec t1,t2;
       int spin_counter=0;
@@ -694,9 +707,8 @@ public:
 #ifdef TRACK_LIBRARY_CYCLES
           wait_cycles = determ_task_clock_read_cycle_counter() - start_cycles;
 #endif
-          //cout << "ff tid: " << _thread_index << " " << fast_forward_clock() << endl;
           //fast forward our clock
-          determ_task_clock_add_ticks(fast_forward_clock() + (TOKEN_ACQ_ADD_CLOCK * determ::getInstance().active_threads_get()));
+          __add_ticks_to_clock(fast_forward_clock() + (TOKEN_ACQ_ADD_CLOCK * determ::getInstance().active_threads_get()));
           _token_holding=true;
           //cout << "got token tid: " << _thread_index << " " << determ_task_clock_read() << endl;
           //we just got out of a coarsened tx...should we increase or decrease the granularity?
