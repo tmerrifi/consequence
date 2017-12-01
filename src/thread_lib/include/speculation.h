@@ -110,7 +110,9 @@ class speculation{
     typedef enum { SPEC_TERMINATE_REASON_EXCEEDED_TICKS=1, SPEC_TERMINATE_REASON_EXCEEDED_OBJECT_COUNT=2,
                    SPEC_TERMINATE_REASON_PENDING_SIGNAL=3, SPEC_TERMINATE_REASON_SPEC_DISABLED=4,
                    SPEC_TERMINATE_REASON_NONE=5, SPEC_TERMINATE_REASON_UNINITIALIZED=6,
-                   SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK=7, SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_GLOBAL=8   } spec_terminate_reason_type;
+                   SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_LOCK=7, 
+                   SPEC_TERMINATE_REASON_SPEC_MAY_FAIL_GLOBAL=8,
+                   SPEC_TERMINATE_REASON_INEVITABLE=9 } spec_terminate_reason_type;
     
  private:
     
@@ -144,6 +146,7 @@ class speculation{
     int tid;
     bool learning_phase;
     bool buffered_signal;
+    bool inevitable;
     uint32_t learning_phase_count;
     SyncVarEntry * entry_ended_spec;
     struct timespec tx_start_time;
@@ -223,6 +226,7 @@ class speculation{
         max_ticks=SPECULATION_START_TICKS;
 	max_sync_objs = SPECULATION_START_MAX_SYNC_OBJS;
         buffered_signal=false;
+        inevitable=false;
         seq_num=0;
         signal_delay_ticks=0;
         global_success_rate=100.0;
@@ -325,6 +329,10 @@ class speculation{
         else if (entry==NULL){
             terminated_spec_reason = SPEC_TERMINATE_REASON_UNINITIALIZED;
             return_val=false;
+        }
+        else if (inevitable) {
+           terminated_spec_reason = SPEC_TERMINATE_REASON_INEVITABLE;
+           return_val=false;
         }
         //if we're about to speculate on a lock that is likely to cause a conflict, lets not do it
         else if (!__shouldAttempt( specStatsSuccessRate(entry,tid))){
@@ -443,10 +451,8 @@ class speculation{
             
 #ifdef USE_DEBUG_COUNTER
             perfcounterlib_start(perf_counter);
-#endif //ENDING DEBUG_COUNTER
-            
+#endif //ENDING DEBUG_COUNTER            
             clock_gettime(CLOCK_REALTIME, &tx_start_time);
-            
             return _checkpoint.checkpoint_begin();
         }
         else{
@@ -482,20 +488,28 @@ class speculation{
             entries_count=0;
             ticks=0;
             start_ticks=0;
+            inevitable=false;
             locks_count=0;
             active_speculative_entries=0;
             simple_stack_clear(nested_stack);
             buffered_signal=false;
             signal_delay_ticks=0;
-            //cout << "Reverting..." << getpid() << endl;
+            //cout << "Reverting..." << tid << " " << getpid() << endl;
             _checkpoint.checkpoint_revert();
         }
         else{
             adaptSpeculation(true);
-            //cout << "Success..." << getpid() << endl;
+            //cout << "Success..." << tid << " " << getpid() << endl;
             return 1;
         }
     }
+
+     bool makeInevitable(){
+        if (!inevitable) {
+           inevitable = verify_synchronization();
+        }
+        return inevitable;
+     }
 
      void endSpeculativeEntry(void * entry_ptr){
          assert(active_speculative_entries>0);
@@ -532,6 +546,7 @@ class speculation{
          entries_count=0;
          locks_count=0;
          buffered_signal=false;
+         inevitable=false;
          signal_delay_ticks=0;
          _checkpoint.is_speculating=false;
          ticks=0;
@@ -547,6 +562,10 @@ class speculation{
         seq_num++;
         //cout << "updatelastcomm tid: " << tid << " " << entry << " " << logical_clock << endl;
 
+     }
+
+     bool isInevitable(){
+        return inevitable;
      }
 
      int getActiveEntriesCount(){

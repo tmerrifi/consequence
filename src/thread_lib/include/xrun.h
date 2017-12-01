@@ -1326,9 +1326,11 @@ retry:
           stopClockForceEnd();
           waitToken();
           if (_speculation && _speculation->isSpeculating()){
-              cout << "beginSysSpec " << _speculation->getLogicalClockStart() << " " << getpid() << endl;
-              commitAndUpdateMemoryTerminateSpeculationForced();
-              endTXCoarsening();
+             //is this a candidate for an inevitable tx?
+             if (!_speculation->makeInevitable()) {
+                commitAndUpdateMemoryTerminateSpeculationForced();
+                endTXCoarsening();
+             }
           }
       }
   }
@@ -1336,8 +1338,13 @@ retry:
 
   static void endSysCall(){
       if (_initialized && alive){
-          putToken();
-          startClock();
+         if (!_speculation->isInevitable()) {
+            putToken();
+         }
+         else{
+            //cout << "inevitable: avoiding token release in endSysCall " << _thread_index << endl;
+         }
+         startClock();
       }
   }
 
