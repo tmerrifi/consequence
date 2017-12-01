@@ -106,7 +106,7 @@ do
 		echo "#"$vname >> out/$seq/variants;
 		for t in $threads
 		do
-			rm /tmp/results;
+			rm -f /tmp/results /tmp/syncData.txt;
 			for i in `seq 1 $trials`;
 			do
 				echo "running: "$p $vname $t
@@ -128,7 +128,7 @@ do
 				export rawOutputFile=out/${seq}/log/${outfile};
 
 				if [ -z "$ops_pattern" ]
-				then
+				then   
 					ops=0;
 				else
 					ops=`eval $ops_pattern | awk '{t+=$1;}END{print t}'`;
@@ -137,10 +137,8 @@ do
      		               	mins=`cat out/$seq/log/$outfile | grep real | awk -F 'm' '{print $1}' | awk '{print $2*1000*60}'`
                		        #get seconds and milliseconds
                        		rest=`cat out/$seq/log/$outfile | grep real | sed -r s/"[0-9]*m|s"//g | awk '{print $2}' | awk -F '.' '{print $1*1000+$2}'`
-				fulllogpath=$CONSEQ_PATH/evaluation/overall_performance/out/$seq/log/$outfile;
+				fullogpath=$CONSEQ_PATH/evaluation/overall_performance/out/$seq/log/$outfile;
 				kernlogpath=$CONSEQ_PATH/evaluation/overall_performance/out/$seq/log/$outfile"_kernlog";
-				#lets get the stats
-				stats=`cat $fulllogpath | grep specstats:`;
 				if [ -z $token ]
                                 then
                                         token=0;
@@ -149,6 +147,9 @@ do
 				#sudo killall MUTEX-hashtable;
 				sudo cat /var/log/syslog > $kernlogpath;
 	                        echo $((mins+rest))" "$ops" "$token >> /tmp/results; #out/$seq/$p"_"$vname"_"$t"_"$i;
+				echo out/$seq/log/$outfile
+       			        cat out/$seq/log/$outfile | grep spec | sed s/acq/" "/g | sed s/,/" "/g | grep specCSLength >> /tmp/syncData.txt;
+
 				#Ok, lets analyze this run
                                 viewer=`echo $v | grep "viewer=" | wc -l`;
 			done;
@@ -165,6 +166,16 @@ do
 			#variant,program,threads,key,value,error
 			echo ${vtitle},${p},${t},OPS,`./meanAndStddev.sh /tmp/results 2 | sed s/" "/","/g` >> out/${seq}/statsAll;
 			echo ${vtitle},${p},${t},RUNTIME,`./meanAndStddev.sh /tmp/results 1 | sed s/" "/","/g` >> out/${seq}/statsAll;
+			#process sync data
+			echo ${vtitle},${p},${t},LOCKS,`./meanAndStddev.sh /tmp/syncData.txt 3 | sed s/" "/","/g` >> out/${seq}/statsAll;
+			echo ${vtitle},${p},${t},SPEC_LOCKS,`./meanAndStddev.sh /tmp/syncData.txt 6 | sed s/" "/","/g` >> out/${seq}/statsAll;
+			echo ${vtitle},${p},${t},COND_SIGNALS,`./meanAndStddev.sh /tmp/syncData.txt 12 | sed s/" "/","/g` >> out/${seq}/statsAll;
+			echo ${vtitle},${p},${t},BARRIERS,`./meanAndStddev.sh /tmp/syncData.txt 17 | sed s/" "/","/g` >> out/${seq}/statsAll;
+			echo ${vtitle},${p},${t},TOKENACQ,`./meanAndStddev.sh /tmp/syncData.txt 19 | sed s/" "/","/g` >> out/${seq}/statsAll;
+			echo ${vtitle},${p},${t},SPEC_FAIL,`./meanAndStddev.sh /tmp/syncData.txt 21 | sed s/" "/","/g` >> out/${seq}/statsAll;
+			echo ${vtitle},${p},${t},SPEC_SUCC,`./meanAndStddev.sh /tmp/syncData.txt 23 | sed s/" "/","/g` >> out/${seq}/statsAll;
+			echo ${vtitle},${p},${t},SPEC_AVG_CS_FAIL,`./meanAndStddev.sh /tmp/syncData.txt 25 | sed s/" "/","/g` >> out/${seq}/statsAll;
+			echo ${vtitle},${p},${t},SPEC_AVG_CS_SUCC,`./meanAndStddev.sh /tmp/syncData.txt 27 | sed s/" "/","/g` >> out/${seq}/statsAll;
 		done;
 		ops_files=$p"_"$vname"_ops,"$ops_files;
 		time_files=$p"_"$vname"_time,"$time_files;
