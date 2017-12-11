@@ -67,8 +67,6 @@
 #define MAX_EVENTS 0
 #endif
 
-#define EVENT_VIEWER_LITE
-
 //#define fprintf(...) 
 
 #define BARRIER_TOKEN_HELD_FLAG (1<<20)
