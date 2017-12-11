@@ -521,6 +521,7 @@ public:
   static void cancel(void *v) {
     int threadindex;
     stopClockForceEndNoCoarsen();
+    threadindex = xthread::getThreadIndex(v);
     waitToken();
     commitAndUpdateMemoryTerminateSpeculation();
     determ::getInstance().cancel(threadindex);

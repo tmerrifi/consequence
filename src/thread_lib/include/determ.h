@@ -502,8 +502,6 @@ public:
           {
               CondEntry * condentry = (CondEntry *) entry->cond;
               removeEntry((Entry *) entry, &condentry->head);
-              assert(condentry->waiters == 0);
-              assert(condentry->head != NULL);
               isFound = true;
           }
           break;          
