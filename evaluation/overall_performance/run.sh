@@ -61,7 +61,7 @@ echo $trials > out/$seq/trials;
 rm -rf $CONSEQ_PATH/evaluation/clock_skew/output/$seq
 mkdir $CONSEQ_PATH/evaluation/clock_skew/output/$seq
 
-splash_size=simmedium;
+splash_size=simlarge;
 
 lastVariant="";
 
