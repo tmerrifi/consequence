@@ -39,8 +39,8 @@
 
 static inline void logical_clock_update_clock_ticks(struct task_clock_group_info * group_info, int tid){
     unsigned long rawcount = local64_read(&group_info->clocks[tid].event->count); 
-    group_info->clocks[tid].debug_last_overflow_ticks=rawcount;
-    group_info->clocks[tid].debug_last_enable_ticks=__get_chunk_ticks(group_info, tid);
+    //group_info->clocks[tid].debug_last_overflow_ticks=rawcount;
+    //group_info->clocks[tid].debug_last_enable_ticks=__get_chunk_ticks(group_info, tid);
     __inc_clock_ticks(group_info, tid, rawcount);
     local64_set(&group_info->clocks[tid].event->count, 0);
 }
@@ -94,8 +94,8 @@ static inline void logical_clock_read_clock_and_update(struct task_clock_group_i
     delta+=local64_read(&group_info->clocks[id].event->count);
     local64_set(&group_info->clocks[id].event->count, 0);
     if (counter_was_on){
-        group_info->clocks[__current_tid()].debug_last_overflow_ticks=delta;
-        group_info->clocks[id].debug_last_enable_ticks=__get_chunk_ticks(group_info, id);
+        //group_info->clocks[__current_tid()].debug_last_overflow_ticks=delta;
+        //group_info->clocks[id].debug_last_enable_ticks=__get_chunk_ticks(group_info, id);
         //add it to our current clock
         __inc_clock_ticks(group_info, id, delta);
         //let userspace see it
