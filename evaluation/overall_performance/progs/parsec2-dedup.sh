@@ -16,12 +16,14 @@ else
     threads=8;
 fi
 
-
 cd /local_home/tmerrifi/dthreads/eval/tests/dedup;
 
 if [ $2 = "gcc-pthreads" ]
 then
 	(time ./dedup-pthread -c -p -f -t $threads -i ../../datasets/dedup/media_large.dat -o output.dat.ddp)
+elif [ $2 = "gcc-dthreads" ]
+then
+	(time ./dedup-dthread -c -p -f -t $threads -i ../../datasets/dedup/media_large.dat -o output.dat.ddp)
 else
 	(time ./dedup-dthread_cv -c -p -f -t $threads -i ../../datasets/dedup/media_large.dat -o output.dat.ddp)
 fi
