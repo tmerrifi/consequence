@@ -97,7 +97,11 @@ static inline void ALWAYS_INLINE specStatsFailed(SyncVarEntry * syncEntry, int t
 }
 
 static inline double ALWAYS_INLINE specStatsSuccessRate(SyncVarEntry * syncEntry, int tid){
+   #ifdef SPEC_DISABLE_PER_LOCK_STATS
+   return 1.0
+   #else
    return ((double)__builtin_popcountl(syncEntry->stats.results[tid]))/64.0 ;
+   #endif
 }
 
 static inline int ALWAYS_INLINE specStatsSucceededLastTime(SyncVarEntry * syncEntry, int tid){
