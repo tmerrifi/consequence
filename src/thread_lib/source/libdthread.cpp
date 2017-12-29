@@ -457,6 +457,22 @@ ssize_t read(int fd, void *buf, size_t count) {
         return __conseq_mmap(addr, length, prot, flags, fd, offset);
     }
 
+    int munmap(void * addr, size_t length){
+       if (initialized){
+          //cout << "munmap " << getpid() << " " << addr << endl;
+          xrun::beginSysCall();
+       }
+       
+       int result = WRAP(munmap)(addr, length);
+       
+       if (initialized){          
+          xrun::endSysCall();
+          //cout << "ending syscall done " << getpid() << endl;
+       }
+
+       return result;
+    }
+
     int sched_yield(void){
         if (initialized){
             xrun::schedYield();

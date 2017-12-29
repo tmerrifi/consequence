@@ -7,6 +7,7 @@
 #define WRAP(x) _real_##x
 
 // libc functions
+extern int (*WRAP(munmap))(void * addr, size_t length);
 extern void* (*WRAP(mmap))(void*, size_t, int, int, int, off_t);
 extern void* (*WRAP(malloc))(size_t);
 extern void  (*WRAP(free))(void *);
