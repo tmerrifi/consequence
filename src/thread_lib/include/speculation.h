@@ -254,17 +254,17 @@ class speculation{
 
 
     void updateTicks(){
-#ifdef SPEC_USE_TICKS
         if (isSpeculating()){
             this->ticks=determ_task_clock_read() - start_ticks;
         }
-#else
-        
-#endif
     }
 
     void adaptSpeculation(bool succeeded){
-#ifdef SPEC_USE_TICKS
+
+#ifdef SPEC_DISABLE_COARSENING
+       max_sync_objs = 1;
+       max_ticks = SPECULATION_MAX_TICKS;
+#else
         if (succeeded){
             max_ticks = xmin(max_ticks + SUCCEEDED_TICK_INC, SPECULATION_MAX_TICKS);
             max_sync_objs = xmin(max_sync_objs + 1, SPECULATION_ENTRIES_MAX);
@@ -273,6 +273,7 @@ class speculation{
             max_ticks = xmax(max_ticks/2, SPECULATION_MIN_TICKS);
             max_sync_objs = xmax(max_sync_objs/2, 1);
         }
+
 #endif
     }
     
@@ -340,11 +341,19 @@ class speculation{
             entry_ended_spec=entry;
             return_val=false;
         }
-        else if (entries_count >= SPECULATION_ENTRIES_MAX || entries_count >= max_sync_objs){
+        else if (entries_count >= SPECULATION_ENTRIES_MAX){
             terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_OBJECT_COUNT;
             entry_ended_spec=entry;
             return_val=false;
         }
+#ifndef SPEC_DISABLE_ADAPTIVE_SYNC_OBJ
+        else if (entries_count >= max_sync_objs) {
+           terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_OBJECT_COUNT;
+           entry_ended_spec=entry;
+           return_val=false;
+        }
+#endif
+
 #ifdef SPEC_USE_TICKS
         else if (entries_count >= max_entries){
             terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_OBJECT_COUNT;
@@ -436,6 +445,7 @@ class speculation{
         entries[entries_count].acquisition_logical_time=logical_clock;
         entries_count++;
         if (!_checkpoint.is_speculating){
+            //cout << "Begin spec: " << getpid() << endl;
             logical_clock_start=logical_clock;
             start_ticks = determ_task_clock_read();
             terminated_spec_reason = SPEC_TERMINATE_REASON_NONE;
@@ -473,6 +483,7 @@ class speculation{
             return 0;
         }
         else if (!(result=verify_synchronization()) || active_speculative_entries > 0){
+            //cout << "Reverting..." << tid << " " << getpid() << " " << inevitable << endl;
             if (forcedTerminate && active_speculative_entries>0){
                 //if this happens we need to make sure we don't speculate on this lock when we retry. We also take this one step further
                 //and heavily penalize the lock, as it appears to be protecting a CS that is going to do something we don't like (system call?).
@@ -494,7 +505,6 @@ class speculation{
             simple_stack_clear(nested_stack);
             buffered_signal=false;
             signal_delay_ticks=0;
-            //cout << "Reverting..." << tid << " " << getpid() << endl;
             _checkpoint.checkpoint_revert();
         }
         else{
@@ -505,10 +515,14 @@ class speculation{
     }
 
      bool makeInevitable(){
+#ifdef SPEC_DISABLE_INEVITABLE
+        return false;
+#else
         if (!inevitable) {
            inevitable = verify_synchronization();
         }
         return inevitable;
+#endif
      }
 
      void endSpeculativeEntry(void * entry_ptr){
