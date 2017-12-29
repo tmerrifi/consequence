@@ -8,8 +8,6 @@ else
     threads=$1;
 fi
 
-size="simmedium"
-
 if [ $2 = "gcc-pthreads" ]
 then
 	(time ./run.sh $threads $size pthread)

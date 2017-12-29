@@ -1,5 +1,5 @@
 #!/bin/bash
-cd /local_home/tmerrifi/dthreads/eval/tests/water_nsquared/src;
+cd /local_home/tmerrifi/dthreads/eval/tests/radix/src;
 
 if [[ $1 -eq 24 ]]
 then

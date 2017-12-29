@@ -9,6 +9,10 @@ function usage(){
 #set scaling
 for i in `seq 0 63`; do sudo cpufreq-set -c $i -g performance; done;
 
+#update the number of open files we can have. This is necessary only when we turn off the thread pool
+#need to update the hard limit for your user in /etc/security/limits.conf
+sudo ulimit -n 20000;
+
 #get the sequence number
 seq=`cat seqnum`;
 seq=$((seq+1))
@@ -61,7 +65,7 @@ echo $trials > out/$seq/trials;
 rm -rf $CONSEQ_PATH/evaluation/clock_skew/output/$seq
 mkdir $CONSEQ_PATH/evaluation/clock_skew/output/$seq
 
-splash_size=simlarge;
+splash_size=simmedium;
 
 lastVariant="";
 

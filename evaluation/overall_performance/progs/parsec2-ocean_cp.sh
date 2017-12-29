@@ -8,16 +8,14 @@ else
     threads=$1;
 fi
 
-size="simmedium"
-
 if [ $2 = "gcc-pthreads" ]
 then
-	(time ./run.sh $threads $size pthread)
+	(time ./run.sh $threads $3 pthread)
 elif [ $2 = "gcc-dthreads" ]
 then
-	(time ./run.sh $threads $size dthread)
+	(time ./run.sh $threads $3 dthread)
 else
-	(time ./run.sh $threads $size dthread_cv)
+	(time ./run.sh $threads $3 dthread_cv)
 fi
 rm -f meta_* grace* TASK_CLOCK*;
 cd -;
