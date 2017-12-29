@@ -21,27 +21,10 @@
 #ifdef TOKEN_ORDER_ROUND_ROBIN
 //basically just infinity...relying on SPECULATION_ENTRIES_MAX
 #define SPECULATION_ENTRIES_MAX 50
-#define SPECULATION_START_TICKS 500000000
-#define SPECULATION_MAX_TICKS 500000000
-#define SPECULATION_MIN_TICKS 5000
 #else
 //!TOKEN_ORDER_ROUND_ROBIN
 #ifndef SPECULATION_ENTRIES_MAX
 #define SPECULATION_ENTRIES_MAX 1024
-#endif
-
-#ifndef SPECULATION_START_TICKS
-#define SPECULATION_START_TICKS 30000
-#endif
-
-//this number will be adjusted during adaptation
-#ifndef SPECULATION_MAX_TICKS
-#define SPECULATION_MAX_TICKS 150000
-#endif
-
-//we never adapt less than this number
-#ifndef SPECULATION_MIN_TICKS
-#define SPECULATION_MIN_TICKS 1000
 #endif
 
 //how many locks can we do during fast path?
@@ -134,14 +117,11 @@ class speculation{
     checkpoint _checkpoint;
     uint32_t max_entries;
     uint32_t max_sync_objs;
-    uint64_t max_ticks;
     uint64_t ticks;
-    uint64_t start_ticks;
     uint64_t seq_num;
     uint64_t failure_count;
     uint64_t successful_commits;
     uint64_t tx_count;
-    uint64_t signal_delay_ticks;
     double global_success_rate;
     int tid;
     bool learning_phase;
@@ -223,12 +203,10 @@ class speculation{
         active_speculative_entries=0;
         logical_clock_start=0;
         max_entries=SPECULATION_ENTRIES_MAX;
-        max_ticks=SPECULATION_START_TICKS;
 	max_sync_objs = SPECULATION_START_MAX_SYNC_OBJS;
         buffered_signal=false;
         inevitable=false;
         seq_num=0;
-        signal_delay_ticks=0;
         global_success_rate=100.0;
         terminated_spec_reason=SPEC_TERMINATE_REASON_NONE;
 #ifdef SPEC_DISABLE_ADAPTATION
@@ -252,25 +230,15 @@ class speculation{
         nested_stack=simple_stack_init(SPECULATION_ENTRIES_MAX_ALLOCATED);
     }
 
-
-    void updateTicks(){
-        if (isSpeculating()){
-            this->ticks=determ_task_clock_read() - start_ticks;
-        }
-    }
-
     void adaptSpeculation(bool succeeded){
 
 #ifdef SPEC_DISABLE_COARSENING
        max_sync_objs = 1;
-       max_ticks = SPECULATION_MAX_TICKS;
 #else
         if (succeeded){
-            max_ticks = xmin(max_ticks + SUCCEEDED_TICK_INC, SPECULATION_MAX_TICKS);
             max_sync_objs = xmin(max_sync_objs + 1, SPECULATION_ENTRIES_MAX);
         }
         else{
-            max_ticks = xmax(max_ticks/2, SPECULATION_MIN_TICKS);
             max_sync_objs = xmax(max_sync_objs/2, 1);
         }
 
@@ -315,7 +283,6 @@ class speculation{
     bool shouldSpeculate(void * entry_ptr, uint64_t logical_clock, int * result, speculation_entry_type entry_type){
         bool return_val;
         unsigned long long startcycles = __rdtsc();
-        updateTicks();
         SyncVarEntry * entry=(SyncVarEntry *)getSyncEntry(entry_ptr);
         
         if (active_speculative_entries > 0){
@@ -354,27 +321,12 @@ class speculation{
         }
 #endif
 
-#ifdef SPEC_USE_TICKS
-        else if (entries_count >= max_entries){
-            terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_OBJECT_COUNT;
-            return_val=false;
-        }
-        //ignore every SPEC_ATTEMPT_AGAIN
-        else if (ticks >= max_ticks && !(seq_num % SPEC_ATTEMPT_AGAIN == 0) ){
-            terminated_spec_reason = SPEC_TERMINATE_REASON_EXCEEDED_TICKS;
-            return_val=false; 
-        }
-        else if (buffered_signal==true && (ticks - signal_delay_ticks) > SPEC_TICKS_TO_HOLD_SIGNAL) {
-            terminated_spec_reason = SPEC_TERMINATE_REASON_PENDING_SIGNAL;
-            return_val=false;            
-        }
-#else
         //lets kill it if we are buffering a signal. Don't want to delay other threads due to speculation
         else if (buffered_signal==true){
             terminated_spec_reason = SPEC_TERMINATE_REASON_PENDING_SIGNAL;
             return_val=false;
         }
-#endif
+
         else if (isSpeculating() && !__verify_sync_entry(entry, logical_clock_start, entry_type, tid)) {
             return_val=false;
         }
@@ -383,18 +335,6 @@ class speculation{
             return_val=true;
         }
 
-#ifdef USE_FTRACE_DEBUGGING
-        if (return_val==false && tx_count%FTRACE_FREQUENCY==0){
-            char end_message[100];
-            determ_task_clock_force_read();
-            updateTicks();
-            clock_gettime(CLOCK_REALTIME, &tx_end_time);
-            unsigned long diff = time_util_time_diff(&tx_start_time, &tx_end_time);
-            sprintf(end_message, "ending-tx...%lu %lu %d %d", diff, ticks, seq_num, getpid());
-            ftrace_write_to_trace(tracer, end_message);
-            ftrace_off(tracer);
-        }
-#endif //END FTRACE
         return return_val;
     }
     
@@ -432,7 +372,6 @@ class speculation{
         }
         if (type == SPEC_ENTRY_SIGNAL || type == SPEC_ENTRY_BROADCAST){
             buffered_signal=true;
-            signal_delay_ticks=ticks;
         }
         else if (type == SPEC_ENTRY_LOCK) {
             active_speculative_entries++;
@@ -447,7 +386,6 @@ class speculation{
         if (!_checkpoint.is_speculating){
             //cout << "Begin spec: " << getpid() << endl;
             logical_clock_start=logical_clock;
-            start_ticks = determ_task_clock_read();
             terminated_spec_reason = SPEC_TERMINATE_REASON_NONE;
             tx_count++;
 #ifdef USE_FTRACE_DEBUGGING
@@ -498,13 +436,11 @@ class speculation{
             failure_count++;
             entries_count=0;
             ticks=0;
-            start_ticks=0;
             inevitable=false;
             locks_count=0;
             active_speculative_entries=0;
             simple_stack_clear(nested_stack);
             buffered_signal=false;
-            signal_delay_ticks=0;
             _checkpoint.checkpoint_revert();
         }
         else{
@@ -561,7 +497,6 @@ class speculation{
          locks_count=0;
          buffered_signal=false;
          inevitable=false;
-         signal_delay_ticks=0;
          _checkpoint.is_speculating=false;
          ticks=0;
          successful_commits++;
@@ -574,8 +509,6 @@ class speculation{
         entry->last_committed=logical_clock;
         entry->committed_by=tid;
         seq_num++;
-        //cout << "updatelastcomm tid: " << tid << " " << entry << " " << logical_clock << endl;
-
      }
 
      bool isInevitable(){
@@ -597,10 +530,6 @@ class speculation{
      
      uint64_t getCurrentTicks(){
          return ticks;
-     }
-
-     uint64_t getMaxTicks(){
-         return max_ticks;
      }
 
      spec_terminate_reason_type getTerminateReasonType(){
