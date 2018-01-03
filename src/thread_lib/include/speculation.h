@@ -122,7 +122,6 @@ class speculation{
     uint64_t failure_count;
     uint64_t successful_commits;
     uint64_t tx_count;
-    double global_success_rate;
     int tid;
     bool learning_phase;
     bool buffered_signal;
@@ -152,16 +151,6 @@ class speculation{
         }
     }
     
-    void update_global_success_rate(bool success){
-        if (success){
-            global_success_rate=(EWMA_ALPHA*100.0) + (global_success_rate*(1.0 - EWMA_ALPHA));
-        }
-        else{
-            global_success_rate=global_success_rate*(1.0 - EWMA_ALPHA);
-        }
-    }
-
-
     inline bool ALWAYS_INLINE __last_committed_is_larger(SyncVarEntry * entry, uint64_t clock, int tid){
         return (entry->last_committed > clock ||
                 entry->last_committed==clock && entry->committed_by != tid);
@@ -178,12 +167,8 @@ class speculation{
         int r = rand();
         for (int i=0;i<entries_count;i++){
             SyncVarEntry * entry = entries[i].entry;
-            if (__verify_sync_entry(entry, logical_clock_start, entries[i].type, tid)) {
-                update_global_success_rate(true);
-            }
-            else{
+            if (!__verify_sync_entry(entry, logical_clock_start, entries[i].type, tid)) {
                 //this entry caused us to fail...update its stats
-                update_global_success_rate(false);
                 specStatsFailed(entry, tid, SPEC_FAILURE_PENALTY_NORMAL);
                 return false;
             }
@@ -207,7 +192,6 @@ class speculation{
         buffered_signal=false;
         inevitable=false;
         seq_num=0;
-        global_success_rate=100.0;
         terminated_spec_reason=SPEC_TERMINATE_REASON_NONE;
 #ifdef SPEC_DISABLE_ADAPTATION
         learning_phase=false;  

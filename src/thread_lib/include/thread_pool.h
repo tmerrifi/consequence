@@ -43,7 +43,7 @@
 
 #include "real.h"
 
-#define DISABLE_THREAD_POOL 1
+//#define DISABLE_THREAD_POOL 1
 
 //#define DTHREADS_TASKCLOCK_DEBUG 1
 
