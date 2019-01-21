@@ -325,6 +325,7 @@ public:
     // Get the global thread index for this thread, which will be used internally.
     //_thread_index = xatomic::increment_and_return(&global_data->thread_index);
     _thread_index = child_index;
+    cout << "childRegister " << getpid() << endl;
     _lock_count = 0;
     _token_holding = false;
     alive=true;
@@ -961,9 +962,12 @@ retry:
 #ifdef USE_TAGGING
         xmemory::set_local_version_tag((unsigned int)mutex);
 #endif
+#ifdef DTHREADS_TASKCLOCK_DEBUG
+        cout << "mutex lock begin " << _thread_index << " " << determ_task_clock_read() << " pid " << getpid() << " " << mutex << " " << _lock_count << endl;
+#endif
         __mutex_lock_inner(mutex, true /*allow coarseing?*/);
 #ifdef DTHREADS_TASKCLOCK_DEBUG
-        cout << "mutex lock " << _thread_index << " " << determ_task_clock_read() << " pid " << getpid() << " " << mutex << endl;
+        cout << "mutex lock end " << _thread_index << " " << determ_task_clock_read() << " pid " << getpid() << " " << mutex << " " << _lock_count << endl;
 #endif
         //**************DEBUG CODE**************
 #ifdef EVENT_VIEWER
@@ -999,6 +1003,10 @@ retry:
       determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_LIB, mutex);
 #endif
       //*************END DEBUG CODE*********************
+#ifdef DTHREADS_TASKCLOCK_DEBUG
+      cout << "UNLOCK: starting lock (before assert) " << determ_task_get_id() << " " << determ_task_clock_read()
+             << " tid " << _thread_index << " lock count " << _lock_count << " m: " << mutex << " " << getpid() << endl;
+#endif
       bool isSpeculating=_speculation->isSpeculating();            
       assert(_lock_count>0);
       _lock_count--;
@@ -1156,6 +1164,7 @@ retry:
 #ifdef USE_TAGGING
         xmemory::set_local_version_tag((unsigned int)lock);
 #endif
+      cout << "cond wait " << getpid() << endl;
       _lock_count--;
       if (acquiringToken){
           waitToken();

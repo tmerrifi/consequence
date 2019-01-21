@@ -49,9 +49,6 @@ void * xthread::spawn(threadFunction * fn, void * arg, int parent_index, ThreadP
 
     t->threadIndex=tpe->id;
     
-#ifdef DTHREADS_TASKCLOCK_DEBUG
-    cout << " got threadpool entry, arg: " << *((int *)arg) << endl;
-#endif
     return forkSpawn(fn, arg, parent_index, tpe);
 }
 

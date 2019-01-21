@@ -79,6 +79,13 @@ int (*WRAP(pthread_barrier_destroy))(pthread_barrier_t*);
 // handle sleeps
 int (*WRAP(nanosleep))(const struct timespec *, struct timespec *);
 unsigned int (*WRAP(sleep))(unsigned int);
+int (*WRAP(usleep))(useconds_t);
+
+int (*WRAP(futex))(int *uaddr, int, int, const struct timespec *, int *, int);
+
+int (*WRAP(epoll_wait))(int epfd, struct epoll_event *events,
+               int maxevents, int timeout);
+
 
 #ifndef assert
 #define assert(x) 
@@ -135,4 +142,8 @@ void init_real_functions() {
 
         SET_WRAPPED(nanosleep, RTLD_NEXT);
         SET_WRAPPED(sleep, RTLD_NEXT);
+        SET_WRAPPED(usleep, RTLD_NEXT);
+
+        SET_WRAPPED(futex, RTLD_NEXT);
+        SET_WRAPPED(epoll_wait, RTLD_NEXT);
 }

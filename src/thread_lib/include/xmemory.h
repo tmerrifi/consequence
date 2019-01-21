@@ -286,12 +286,31 @@ public:
         _globals.set_local_version_tag(tag);
     }
 
+    static unsigned long long __rdtsc(void)
+    {
+        unsigned long low, high;
+        asm volatile("rdtsc" : "=a" (low), "=d" (high));
+        return ((low) | (high) << 32);
+    }
+
     //revert heap and globals
     static void __attribute__ ((noinline)) revert_heap_and_globals(){
-        //cout << "revert " << getpid() << endl;
+        unsigned long long start, end;
+        int initialDirtyPages, postRevertDirty;
+
+        initialDirtyPages = _pheap.get_dirty_pages() + 
+           _globals.get_dirty_pages();
+        
+        start = __rdtsc();
         _pheap.revert(_heapid);
         _pheap.revert_heap_and_globals();
         _globals.revert_heap_and_globals();
+        postRevertDirty = _pheap.get_dirty_pages() + 
+           _globals.get_dirty_pages();
+        //cycles, non-checkpointed pages, checkpointed, total
+        cout << "revert_heap_and_globals: " << __rdtsc() - start 
+             << " " << initialDirtyPages - postRevertDirty << " " 
+             << postRevertDirty << " " << initialDirtyPages << endl;
     }
 
     static inline void begin_speculation(){

@@ -243,6 +243,7 @@ int pthread_mutex_lock(pthread_mutex_t *mutex) {
 
 int pthread_mutex_trylock(pthread_mutex_t *mutex) {
 	DEBUG("pthread_mutex_trylock is not supported");
+        assert(0);
 	return 0;
 }
 
@@ -321,6 +322,8 @@ int pthread_join(pthread_t tid, void ** val) {
 }
 
 int pthread_cond_init(pthread_cond_t * cond, const pthread_condattr_t *attr) {
+    cout << "init..." << cond << endl;
+    fflush(stdout);
     xrun::cond_init(cond);
 }
 
@@ -333,7 +336,9 @@ int pthread_cond_signal(pthread_cond_t * cond) {
 }
 
 int pthread_cond_wait(pthread_cond_t * cond, pthread_mutex_t * mutex) {
-    return xrun::cond_wait(cond,mutex);
+   cout << "wait..." << cond << endl;
+   fflush(stdout);
+   return xrun::cond_wait(cond,mutex);
 }
 
 int pthread_cond_destroy(pthread_cond_t * cond) {
@@ -425,9 +430,36 @@ ssize_t read(int fd, void *buf, size_t count) {
         return result;
     }
 
+    /*we use sleep with special arguments as a hack to get certain 
+      applications with problematic regions to call into consequence.
+      This was added to handle memcached's calls into libevent*/
     unsigned int sleep(unsigned int secs){
+        if (secs == 0xDEADBEEF) {
+           cout << "sleep dead beef!" << endl;
+           fflush(stdout);
+           /*begin a non-determinstic operation*/
+           xrun::beginSysCallDeactivate();
+           return 0;
+        }
+        else if (secs == 0xCAFEBABE) {
+           cout << "cafe babe!" << endl;
+           fflush(stdout);
+           /*end a non-deterministic operation*/
+           xrun::endSysCallActivate();
+           return 0;
+        }
+        else {
+           xrun::beginSysCallDeactivate();
+           int result=WRAP(sleep)(secs);
+           xrun::endSysCallActivate();
+           return result;
+        }
+    }
+
+    int usleep(useconds_t usec){
+        cout << "in usleep..." << endl;
         xrun::beginSysCallDeactivate();
-        int result=WRAP(sleep)(secs);
+        int result=WRAP(usleep)(usec);
         xrun::endSysCallActivate();
         return result;
     }
@@ -472,6 +504,36 @@ ssize_t read(int fd, void *buf, size_t count) {
 
        return result;
     }
+
+    int futex(int *uaddr, int op, int val, 
+              const struct timespec *timeout,
+              int *uaddr2, int val3){
+       cout << "futex...." << endl;
+       if (initialized){
+          xrun::beginSysCall();
+       }
+       
+       int result = WRAP(futex)(uaddr, op, val, timeout, uaddr2, val3);
+       
+       if (initialized){          
+          xrun::endSysCall();
+       }
+       return result;
+    }
+
+    int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout){
+       cout << "epoll wait" << endl;
+       if (initialized){
+          xrun::beginSysCallDeactivate();
+       }
+       int result = WRAP(epoll_wait)(epfd, events, maxevents, timeout);
+       cout << "epoll wait done" << endl;
+       if (initialized){
+          xrun::endSysCallActivate();
+       }
+       return result;
+    }
+
 
     int sched_yield(void){
         if (initialized){

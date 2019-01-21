@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #define WRAP(x) _real_##x
 
@@ -52,6 +53,9 @@ extern int (*WRAP(pthread_barrier_destroy))(pthread_barrier_t*);
 
 extern int (*WRAP(nanosleep))(const struct timespec *, struct timespec *);
 extern unsigned int (*WRAP(sleep))(unsigned int);
+extern int (*WRAP(usleep))(useconds_t);
+extern int (*WRAP(futex))(int *uaddr, int, int, const struct timespec *, int *, int);
+extern int (*WRAP(epoll_wait))(int epfd, struct epoll_event *events, int maxevents, int timeout);
 
 
 void init_real_functions();
