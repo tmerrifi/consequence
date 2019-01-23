@@ -236,11 +236,11 @@ public:
             if (singleActiveThread() && tx_coarsening_counter > 0){
                 endTXCoarsening();
             }
-            //if tx_coarsening_counter is greater than 0, then we are inside a coarsened tx. IF thats the case then lets monitor what happens next. If we are the
+            //if tx_coarsening_counter is greater than 0, then we are inside a coarsened tx. IF thats the case then 
+            //lets monitor what happens next. If we are the
             //next thread to grab the token, then lets bump up the allowable tx size by some amount
             else if (tx_coarsening_counter>0){
                 tx_monitor_next=true;
-
             }
             return false;
         }
@@ -353,7 +353,7 @@ public:
     #endif
     commitAndUpdateMemory();
     putToken();
-              
+    cout << "thread register " << determ_task_get_id() << " count " << determ_task_clock_read() << " pid " << getpid() << endl;
     determ::getInstance().start_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION, NULL);
     determ::getInstance().active_threads_inc();
     return (_thread_index);
@@ -363,9 +363,9 @@ public:
       stopClockForceEnd();
 
       determ::getInstance().end_thread_event(_thread_index, DEBUG_TYPE_TRANSACTION);
-#ifdef DTHREADS_TASKCLOCK_DEBUG
+//#ifdef DTHREADS_TASKCLOCK_DEBUG
       cout << "thread deregister " << determ_task_get_id() << " count " << determ_task_clock_read() << " pid " << getpid() << endl;
-#endif
+//#endif
       waitToken();
       commitAndUpdateMemoryTerminateSpeculation();
 
@@ -838,8 +838,9 @@ public:
 	unsigned long long begin, end;
 retry:
         bool isSpeculating=_speculation->isSpeculating();
-        //should we use the tx coarsening?
-        bool isUsingTxCoarsening= !isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
+        //should we consider coarsening if we don't speculate?
+        bool tryCoarsening = !isSpeculating && allow_coarsening;
+        bool isUsingTxCoarsening = tx_coarsening_counter > 0;//!isSpeculating && useTxCoarsening((size_t)mutex) && allow_coarsening;
         //if we are using kendo, we have to keep retrying and incrementing
         //if we aren't using kendo, this is just initialized to zero
         int ticks_to_add=0;
@@ -871,6 +872,12 @@ retry:
                 reverts++;
             }
         }
+        else if (tryCoarsening){
+           //cout << "consider trying to coarsen..." << endl;
+           //isUsingTxCoarsening = false;
+           //isUsingTxCoarsening = useTxCoarsening((size_t)mutex);
+        }
+
         //the clock has been running this whole time...lets stop it before we try to grab the token (nondeterministic)
         if (isSpeculating){
             stopClock(0,true);
@@ -924,7 +931,7 @@ retry:
             _token_holding=false;
             goto retry;
         }
-        else if ((!isSingleActiveThread && !isUsingTxCoarsening)||shouldUpdate){
+        else if ((!isSingleActiveThread && !isUsingTxCoarsening) || shouldUpdate){
             commitAndUpdateMemoryParallelBegin();
             finishCommit = true;
         }
@@ -1223,7 +1230,7 @@ retry:
       wasSpeculating=_speculation->isSpeculating();
 
       /*speculative path*/
-      if(!(wasSpeculating==false && _lock_count>0) &&
+      if(tx_coarsening_counter == 0 && !(wasSpeculating==false && _lock_count>0) &&
          _speculation->shouldSpeculate(cond, get_ticks_for_speculation(),  &shouldSpecResult, speculation::SPEC_ENTRY_BROADCAST)){
 #ifdef NO_DETERM_SYNC
           if (_speculation->speculate(cond,get_ticks_for_speculation(), speculation::SPEC_ENTRY_BROADCAST)==true){
