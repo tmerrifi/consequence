@@ -368,7 +368,7 @@ class speculation{
         entries[entries_count].acquisition_logical_time=logical_clock;
         entries_count++;
         if (!_checkpoint.is_speculating){
-            cout << "Begin spec: " << getpid() << " " << logical_clock << endl;
+            //cout << "Begin spec: " << getpid() << " " << logical_clock << endl;
             logical_clock_start=logical_clock;
             terminated_spec_reason = SPEC_TERMINATE_REASON_NONE;
             tx_count++;
@@ -425,12 +425,12 @@ class speculation{
             active_speculative_entries=0;
             simple_stack_clear(nested_stack);
             buffered_signal=false;
-            cout << "Failed..." << tid << " " << getpid() << endl;
+            //cout << "Failed..." << tid << " " << getpid() << endl;
             _checkpoint.checkpoint_revert();
         }
         else{
             adaptSpeculation(true);
-            cout << "Success..." << tid << " " << getpid() << endl;
+            //cout << "Success..." << tid << " " << getpid() << endl;
             return 1;
         }
     }
